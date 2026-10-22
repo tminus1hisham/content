@@ -15,15 +15,15 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Appearance'),
             onTap: () => context.push('/settings/appearance'),
           ),
-          const ListTile(
-            leading: Icon(Icons.apps_outlined),
-            title: Text('App icon & disguise'),
-            subtitle: Text('Coming soon'),
+          ListTile(
+            leading: const Icon(Icons.apps_outlined),
+            title: const Text('App icon & disguise'),
+            onTap: () => context.push('/settings/disguise'),
           ),
-          const ListTile(
-            leading: Icon(Icons.lock_outline),
-            title: Text('Security'),
-            subtitle: Text('Coming soon'),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('Security'),
+            onTap: () => context.push('/settings/security'),
           ),
           const ListTile(
             leading: Icon(Icons.privacy_tip_outlined),

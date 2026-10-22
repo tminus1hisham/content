@@ -42,3 +42,8 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Theme.AppCompat for LaunchTheme (local_auth requirement).
+    implementation("androidx.appcompat:appcompat:1.7.0")
+}

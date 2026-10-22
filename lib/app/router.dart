@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/prefs.dart';
+import '../features/disguise/disguise_controller.dart';
+import '../features/disguise/lock_gate.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/settings/appearance_screen.dart';
+import '../features/settings/disguise_screen.dart';
+import '../features/settings/security_screen.dart';
 import '../features/settings/settings_screen.dart';
 
 enum UserRole { fan, creator }
@@ -54,14 +58,23 @@ const _creatorTabs = [
   _profileTab,
 ];
 
-/// Rebuilt when the role changes, which swaps the bottom-nav shell.
+/// Rebuilt when the role changes, which swaps the bottom-nav shell. Lock and
+/// disguise changes only re-run the redirect (see [lockRedirect]).
 final routerProvider = Provider<GoRouter>((ref) {
   final tabs = ref.watch(roleProvider) == UserRole.fan
       ? _fanTabs
       : _creatorTabs;
+  final home = tabs.first.path;
+  final refresh = ValueNotifier(0);
+  ref.listen(lockProvider, (_, _) => refresh.value++);
+  ref.listen(disguiseProvider, (_, _) => refresh.value++);
   final router = GoRouter(
-    initialLocation: tabs.first.path,
+    initialLocation: home,
+    refreshListenable: refresh,
+    redirect: (_, state) => lockRedirect(ref, state.matchedLocation, home),
     routes: [
+      GoRoute(path: '/lock', builder: (_, _) => const LockScreen()),
+      GoRoute(path: '/decoy', builder: (_, _) => const DecoyScreen()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => _Shell(shell: shell, tabs: tabs),
         branches: [
@@ -86,11 +99,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'appearance',
             builder: (_, _) => const AppearanceScreen(),
           ),
+          GoRoute(path: 'disguise', builder: (_, _) => const DisguiseScreen()),
+          GoRoute(path: 'security', builder: (_, _) => const SecurityScreen()),
         ],
       ),
     ],
   );
-  ref.onDispose(router.dispose);
+  ref.onDispose(() {
+    router.dispose();
+    refresh.dispose();
+  });
   return router;
 });
 

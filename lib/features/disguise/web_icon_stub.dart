@@ -1,0 +1,1 @@
+void setWebIcon(String name) {}
