@@ -46,6 +46,10 @@ class FakeAuthDb {
       'fan',
       'creator',
     ], true);
+    // A creator who has not started onboarding yet.
+    _users['new@demo.ke'] = _User('u3', 'new@demo.ke', 'password123', [
+      'creator',
+    ], true);
   }
 
   /// A signed-in session for a seeded user, for tests and demos.
@@ -57,9 +61,14 @@ class FakeAuthDb {
 
   _User? _byId(String id) => _users.values.where((u) => u.id == id).firstOrNull;
 
-  _User? _caller(RequestOptions request) {
+  /// The signed-in user's id for a request, or null without a valid token.
+  String? callerId(RequestOptions request) {
     final header = request.headers['Authorization'] as String?;
-    final userId = _access[header?.replaceFirst('Bearer ', '')];
+    return _access[header?.replaceFirst('Bearer ', '')];
+  }
+
+  _User? _caller(RequestOptions request) {
+    final userId = callerId(request);
     return userId == null ? null : _byId(userId);
   }
 
@@ -75,7 +84,7 @@ class FakeAuthDb {
     };
   }
 
-  static const _unauthorized = (
+  static const unauthorized = (
     401,
     {'code': 'UNAUTHORIZED', 'message': 'Sign in again'},
   );
@@ -145,7 +154,7 @@ class FakeAuthDb {
     'POST /auth/refresh': (req, _) {
       final userId = _refresh.remove((req.data as Map)['refreshToken']);
       final user = userId == null ? null : _byId(userId);
-      return user == null ? _unauthorized : (200, _session(user));
+      return user == null ? unauthorized : (200, _session(user));
     },
     'POST /auth/logout': (req, _) {
       _refresh.remove((req.data as Map?)?['refreshToken']);
@@ -153,11 +162,11 @@ class FakeAuthDb {
     },
     'GET /users/me': (req, _) {
       final user = _caller(req);
-      return user == null ? _unauthorized : (200, user.toJson());
+      return user == null ? unauthorized : (200, user.toJson());
     },
     'PUT /users/me/roles': (req, _) {
       final user = _caller(req);
-      if (user == null) return _unauthorized;
+      if (user == null) return unauthorized;
       final roles = ((req.data as Map)['roles'] as List).cast<String>();
       if (roles.isEmpty || roles.any((r) => r != 'fan' && r != 'creator')) {
         return (

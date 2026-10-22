@@ -7,6 +7,7 @@ import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_screens.dart';
 import '../features/disguise/disguise_controller.dart';
 import '../features/disguise/lock_gate.dart';
+import '../features/onboarding/onboarding_screens.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/settings/appearance_screen.dart';
 import '../features/settings/disguise_screen.dart';
@@ -66,6 +67,12 @@ const _creatorTabs = [
   _profileTab,
 ];
 
+/// Tab bodies built so far; other tabs show [PlaceholderScreen].
+final _tabScreens = <String, Widget Function()>{
+  '/profile': ProfileScreen.new,
+  '/home': CreatorHomeScreen.new,
+};
+
 /// Rebuilt when the role changes, which swaps the bottom-nav shell. Lock and
 /// disguise changes only re-run the redirect (see [lockRedirect]).
 final routerProvider = Provider<GoRouter>((ref) {
@@ -110,12 +117,25 @@ final routerProvider = Provider<GoRouter>((ref) {
               routes: [
                 GoRoute(
                   path: tab.path,
-                  builder: (_, _) => tab == _profileTab
-                      ? const ProfileScreen()
-                      : PlaceholderScreen(title: tab.label),
+                  builder: (_, _) =>
+                      _tabScreens[tab.path]?.call() ??
+                      PlaceholderScreen(title: tab.label),
                 ),
               ],
             ),
+        ],
+      ),
+      GoRoute(
+        path: '/onboarding',
+        builder: (_, _) => const OnboardingScreen(),
+        routes: [
+          GoRoute(path: 'identity', builder: (_, _) => const IdentityScreen()),
+          GoRoute(
+            path: 'profile',
+            builder: (_, _) => const CreatorProfileScreen(),
+          ),
+          GoRoute(path: 'contract', builder: (_, _) => const ContractScreen()),
+          GoRoute(path: 'payout', builder: (_, _) => const PayoutSetupScreen()),
         ],
       ),
       GoRoute(

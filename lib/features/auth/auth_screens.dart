@@ -573,7 +573,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             if (usingFakeBackend)
               Text(
-                'Demo: fan@demo.ke or creator@demo.ke, password password123',
+                'Demo: fan@demo.ke, creator@demo.ke or new@demo.ke, '
+                'password password123',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall,
               ),

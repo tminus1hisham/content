@@ -21,7 +21,7 @@ Future<void> pumpApp(
   String? pin,
 }) async {
   fakeLatency = Duration.zero;
-  fakeAuthDb.reset();
+  resetFakeBackend();
   final secure = <String, String>{};
   if (signedInAs != null) {
     final session = fakeAuthDb.sessionFor(signedInAs);
