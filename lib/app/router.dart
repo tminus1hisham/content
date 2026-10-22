@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/prefs.dart';
+import '../features/auth/auth_controller.dart';
+import '../features/auth/auth_screens.dart';
 import '../features/disguise/disguise_controller.dart';
 import '../features/disguise/lock_gate.dart';
 import '../features/profile/profile_screen.dart';
@@ -16,12 +18,18 @@ enum UserRole { fan, creator }
 const roleKey = 'app.role';
 
 class RoleController extends Notifier<UserRole> {
+  /// The stored view, limited to roles the signed-in account actually has.
   @override
-  UserRole build() =>
-      UserRole.values.asNameMap()[ref
-          .watch(sharedPreferencesProvider)
-          .get(roleKey)] ??
-      UserRole.fan;
+  UserRole build() {
+    final roles = ref.watch(authProvider).user?.roles ?? const <String>{};
+    final stored =
+        UserRole.values.asNameMap()[ref
+            .watch(sharedPreferencesProvider)
+            .get(roleKey)] ??
+        UserRole.fan;
+    if (roles.isEmpty || roles.contains(stored.name)) return stored;
+    return roles.contains('fan') ? UserRole.fan : UserRole.creator;
+  }
 
   Future<void> set(UserRole role) async {
     state = role;
@@ -68,13 +76,32 @@ final routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier(0);
   ref.listen(lockProvider, (_, _) => refresh.value++);
   ref.listen(disguiseProvider, (_, _) => refresh.value++);
+  ref.listen(authProvider, (_, _) => refresh.value++);
+  ref.listen(ageGateProvider, (_, _) => refresh.value++);
   final router = GoRouter(
     initialLocation: home,
     refreshListenable: refresh,
-    redirect: (_, state) => lockRedirect(ref, state.matchedLocation, home),
+    redirect: (_, state) {
+      final location = state.matchedLocation;
+      final locked = lockRedirect(ref, location, home);
+      if (locked != null || location == '/lock' || location == '/decoy') {
+        return locked;
+      }
+      return authRedirect(ref, location, home);
+    },
     routes: [
       GoRoute(path: '/lock', builder: (_, _) => const LockScreen()),
       GoRoute(path: '/decoy', builder: (_, _) => const DecoyScreen()),
+      GoRoute(path: '/age', builder: (_, _) => const AgeGateScreen()),
+      GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+      GoRoute(path: '/welcome', builder: (_, _) => const WelcomeScreen()),
+      GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(
+        path: '/verify',
+        builder: (_, state) => VerifyScreen(args: state.extra as VerifyArgs?),
+      ),
+      GoRoute(path: '/role', builder: (_, _) => const RoleScreen()),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => _Shell(shell: shell, tabs: tabs),
         branches: [

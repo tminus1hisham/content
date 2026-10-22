@@ -1,30 +1,13 @@
-import 'package:content/core/prefs.dart';
-import 'package:content/main.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-Future<void> _pumpApp(WidgetTester tester) async {
-  SharedPreferences.setMockInitialValues({});
-  // The lock gate reads the PIN from secure storage at startup.
-  FlutterSecureStorage.setMockInitialValues({});
-  final prefs = await SharedPreferences.getInstance();
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
-      child: const App(),
-    ),
-  );
-  await tester.pumpAndSettle();
-}
+import 'helpers.dart';
 
 void main() {
   testWidgets('Profile > Settings > Appearance > Dark switches theme mode', (
     tester,
   ) async {
-    await _pumpApp(tester);
+    await pumpApp(tester);
     expect(find.text('Discover'), findsWidgets);
 
     await tester.tap(find.text('Profile'));
@@ -42,13 +25,13 @@ void main() {
     );
   });
 
-  testWidgets('dev toggle on Profile switches to the creator tabs', (
+  testWidgets('an account with both roles can switch to the creator tabs', (
     tester,
   ) async {
-    await _pumpApp(tester);
+    await pumpApp(tester, signedInAs: 'creator@demo.ke');
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Creator mode'));
+    await tester.tap(find.text('Creator view'));
     await tester.pumpAndSettle();
 
     expect(find.text('Studio'), findsOneWidget);

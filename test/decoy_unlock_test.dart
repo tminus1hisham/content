@@ -1,27 +1,12 @@
-import 'package:content/core/prefs.dart';
 import 'package:content/features/disguise/disguise_controller.dart';
-import 'package:content/features/disguise/pin_store.dart';
-import 'package:content/main.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'helpers.dart';
 
 /// Cold start with [disguise] active and PIN 1234 set.
-Future<void> _pumpDisguised(WidgetTester tester, Disguise disguise) async {
-  SharedPreferences.setMockInitialValues({disguiseKey: disguise.name});
-  FlutterSecureStorage.setMockInitialValues({});
-  await PinStore().setPin('1234');
-  final prefs = await SharedPreferences.getInstance();
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
-      child: const App(),
-    ),
-  );
-  await tester.pumpAndSettle();
-}
+Future<void> _pumpDisguised(WidgetTester tester, Disguise disguise) =>
+    pumpApp(tester, prefs: {disguiseKey: disguise.name}, pin: '1234');
 
 Future<void> _tapAll(WidgetTester tester, String prefix, String keys) async {
   for (final key in keys.split(' ')) {

@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import '../features/auth/fake_auth.dart';
+
 /// Returns `(statusCode, jsonBody)`. [params] holds `{id}`-style path segments.
 typedef FakeHandler =
     (int, Object?) Function(RequestOptions request, Map<String, String> params);
@@ -8,11 +10,16 @@ typedef FakeHandler =
 /// Later milestones add their routes here.
 final Map<String, FakeHandler> fakeRoutes = {
   'GET /health': (_, _) => (200, {'status': 'ok'}),
+  ...fakeAuthDb.routes,
 };
 
 /// Answers requests from [fakeRoutes] instead of the network.
+/// Simulated network delay; tests set it to zero.
+Duration fakeLatency = const Duration(milliseconds: 150);
+
 class FakeBackendInterceptor extends Interceptor {
-  FakeBackendInterceptor({this.latency = const Duration(milliseconds: 150)});
+  FakeBackendInterceptor({Duration? latency})
+    : latency = latency ?? fakeLatency;
 
   final Duration latency;
 
@@ -21,7 +28,7 @@ class FakeBackendInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    await Future<void>.delayed(latency);
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
     final basePath = Uri.parse(options.baseUrl).path;
     var path = options.uri.path;
     if (basePath.isNotEmpty && path.startsWith(basePath)) {
