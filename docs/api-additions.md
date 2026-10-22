@@ -38,3 +38,44 @@ Any other endpoint returning `401` makes the app call `/auth/refresh` once and r
 | `POST /contracts/offers/{id}/sign` | `{version, documentHash, signatureName, consentToElectronicSignature: true}` | `201 {id, version, documentHash, signedAt, signatureName}`. `409 VERSION_MISMATCH` if the version or hash isn't the current one. `400 SIGNATURE_INVALID` |
 | `POST /creators/me/payout-methods` | `{type: "mpesa", phone: "+2547…", accountName}` | `201 {id, type, phoneMasked, accountName, verified: false}`. Sends an SMS code. Replacing a destination resets `verified` |
 | `POST /creators/me/payout-methods/{id}/verify` | `{code}` | The method with `verified: true`. `400 INVALID_CODE` |
+
+## Content and discovery (§9.6–9.7)
+
+Upload:
+1. `POST /media/upload-sessions {kind: image|video, mimeType, size}` returns `201 {id, uploadUrl}`.
+2. The app sends `PUT` with the raw bytes to `uploadUrl`, with **no** Authorization header.
+3. `POST /media/upload-sessions/{id}/complete` returns `{mediaId, status}`, or `409 UPLOAD_INCOMPLETE`.
+
+The app does one PUT per file today. Tell us which resumable protocol you choose (tus or S3 multipart) and the app will switch to it.
+
+**Post JSON** (every post endpoint returns this shape):
+
+```json
+{
+  "id": "…",
+  "creator": {"id": "…", "handle": "…", "displayName": "…"},
+  "caption": "…",
+  "access": "free|followers|subscribers|paid",
+  "priceCents": 15000,
+  "status": "draft|scheduled|published|archived",
+  "locked": true,
+  "media": [{"id": "…", "kind": "image|video"}],
+  "createdAt": "…",
+  "publishAt": "…",
+  "views": 12
+}
+```
+
+`publishAt` is optional. `views` is only included for the owner. `locked` is computed **per viewer** on the server.
+
+| Endpoint | Notes |
+| --- | --- |
+| `POST /posts` | Body `{caption, mediaIds[], access, priceCents?, publish, consent, publishAt?}`. Errors: `400 MEDIA_REQUIRED` (or media owned by someone else). `403 CREATOR_NOT_APPROVED` for `paid`/`subscribers` before approval. `400 PRICE_OUT_OF_RANGE` (KSh 10 to 50,000, in cents). `400 CONSENT_REQUIRED` when publishing without `consent: true` |
+| `GET /creators/me/posts?status=` | **New.** The owner's posts, without removed ones |
+| `GET /creators/me/analytics` | `{followers, subscribers, posts, views}` |
+| `GET /creators/{handle}` | `{id, handle, displayName, bio, categories, location, verified, followers, isFollowing, isSubscribed}`. The handle `me` is reserved |
+| `GET /creators/{id}/posts` | Published posts, with `locked` set for each viewer |
+| `GET /media/{id}/access` | `200 {url, kind, expiresAt}` (a short-lived URL) or `403 CONTENT_ACCESS_DENIED`. The app never asks for this on a locked post |
+| `DELETE /posts/{id}` | Soft delete, so purchases stay traceable |
+| `POST`/`DELETE /creators/{id}/follow` | Return the creator JSON |
+| `GET /discovery/creators?q=&category=` | Approved, discoverable creators |

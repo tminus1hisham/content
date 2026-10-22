@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
 import '../auth/auth_controller.dart';
+import '../content/studio_screens.dart';
 import '../auth/fake_auth.dart';
 import 'onboarding_controller.dart';
 
@@ -61,9 +62,7 @@ class CreatorHomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),
       body: _async(ref, onboarding, onboardingProvider, (status) {
-        if (status.approved) {
-          return const Center(child: Text('Your dashboard is coming soon'));
-        }
+        if (status.approved) return const CreatorDashboard();
         return _page([
           Card(
             child: ListTile(

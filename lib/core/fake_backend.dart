@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../features/auth/fake_auth.dart';
+import '../features/content/fake_content.dart';
 import '../features/onboarding/fake_onboarding.dart';
 
 /// Returns `(statusCode, jsonBody)`. [params] holds `{id}`-style path segments.
@@ -13,18 +14,20 @@ final Map<String, FakeHandler> fakeRoutes = {
   'GET /health': (_, _) => (200, {'status': 'ok'}),
   ...fakeAuthDb.routes,
   ...fakeOnboardingDb.routes,
+  ...fakeContentDb.routes,
 };
 
 /// Restores every fake table to its seed data.
 void resetFakeBackend() {
   fakeAuthDb.reset();
   fakeOnboardingDb.reset();
+  fakeContentDb.reset();
 }
 
-/// Answers requests from [fakeRoutes] instead of the network.
 /// Simulated network delay; tests set it to zero.
 Duration fakeLatency = const Duration(milliseconds: 150);
 
+/// Answers requests from [fakeRoutes] instead of the network.
 class FakeBackendInterceptor extends Interceptor {
   FakeBackendInterceptor({Duration? latency})
     : latency = latency ?? fakeLatency;

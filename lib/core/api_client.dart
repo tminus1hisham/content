@@ -25,6 +25,14 @@ Dio _bareDio() {
   return dio;
 }
 
+/// For storage upload URLs: no API base and no Authorization header, which
+/// must never be sent to the storage provider.
+final uploadDioProvider = Provider<Dio>((ref) {
+  final dio = _bareDio();
+  ref.onDispose(dio.close);
+  return dio;
+});
+
 /// Bumped when the refresh token is rejected; AuthController signs out.
 final sessionExpiredProvider = StateProvider<int>((ref) => 0);
 

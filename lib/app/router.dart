@@ -7,6 +7,8 @@ import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_screens.dart';
 import '../features/disguise/disguise_controller.dart';
 import '../features/disguise/lock_gate.dart';
+import '../features/content/discover_screens.dart';
+import '../features/content/studio_screens.dart';
 import '../features/onboarding/onboarding_screens.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/settings/appearance_screen.dart';
@@ -71,6 +73,9 @@ const _creatorTabs = [
 final _tabScreens = <String, Widget Function()>{
   '/profile': ProfileScreen.new,
   '/home': CreatorHomeScreen.new,
+  '/discover': DiscoverScreen.new,
+  '/following': FollowingScreen.new,
+  '/studio': StudioScreen.new,
 };
 
 /// Rebuilt when the role changes, which swaps the bottom-nav shell. Lock and
@@ -125,6 +130,17 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
         ],
       ),
+      GoRoute(
+        path: '/c/:handle',
+        builder: (_, state) =>
+            CreatorPage(handle: state.pathParameters['handle']!),
+      ),
+      GoRoute(
+        path: '/p/:id',
+        builder: (_, state) =>
+            PostDetailScreen(id: state.pathParameters['id']!),
+      ),
+      GoRoute(path: '/studio/new', builder: (_, _) => const ComposerScreen()),
       GoRoute(
         path: '/onboarding',
         builder: (_, _) => const OnboardingScreen(),

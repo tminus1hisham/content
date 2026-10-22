@@ -112,6 +112,8 @@ class FakeOnboardingDb {
   /// Fake admin action (M9 adds the real admin screens).
   void approve(String userId) => _creators[userId]?.reviewStatus = 'approved';
 
+  Iterable<String> get approvedIds => _creators.keys.where(isApproved);
+
   bool isApproved(String userId) =>
       _creators[userId]?.reviewStatus == 'approved';
 
