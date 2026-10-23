@@ -1084,31 +1084,38 @@ class _ContractScreenState extends ConsumerState<ContractScreen> {
               ],
             ),
       // Always visible, so it is clear signing unlocks only after reading.
+      // Lifted above the keyboard so the button stays reachable while typing
+      // the signature.
       bottomNavigationBar: offer == null
           ? null
-          : DecoratedBox(
-              decoration: BoxDecoration(
-                color: scheme.surface,
-                border: Border(top: BorderSide(color: scheme.outlineVariant)),
+          : Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(context).bottom,
               ),
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: Center(
-                    heightFactor: 1,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 560),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: Pressable(
-                          child: FilledButton(
-                            key: const ValueKey('contract-sign'),
-                            style: brandButtonStyle(context),
-                            onPressed: canSign ? _sign : null,
-                            child: Text(
-                              _readToEnd
-                                  ? 'Accept and sign'
-                                  : 'Read to the end to sign',
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: scheme.surface,
+                  border: Border(top: BorderSide(color: scheme.outlineVariant)),
+                ),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Center(
+                      heightFactor: 1,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Pressable(
+                            child: FilledButton(
+                              key: const ValueKey('contract-sign'),
+                              style: brandButtonStyle(context),
+                              onPressed: canSign ? _sign : null,
+                              child: Text(
+                                _readToEnd
+                                    ? 'Accept and sign'
+                                    : 'Read to the end to sign',
+                              ),
                             ),
                           ),
                         ),
@@ -1197,6 +1204,10 @@ class _PayoutSetupScreenState extends ConsumerState<PayoutSetupScreen> {
         );
     setState(() => _method = response.data);
     ref.invalidate(onboardingProvider);
+    if (mounted && response.data?['verified'] == true) {
+      _snack(context, 'Payout method verified');
+      context.pop();
+    }
   });
 
   @override

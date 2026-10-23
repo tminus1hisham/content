@@ -167,6 +167,17 @@ void main() {
       find.byKey(const ValueKey('contract-signature')),
       'Zawadi Achieng',
     );
+    // With the keyboard open, the sign button sits above it, not behind it.
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    await tester.pumpAndSettle();
+    final keyboardTop =
+        (tester.view.physicalSize.height - 900) / tester.view.devicePixelRatio;
+    expect(
+      tester.getRect(find.byKey(const ValueKey('contract-sign'))).bottom,
+      lessThanOrEqualTo(keyboardTop),
+    );
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
     await _tapKey(tester, 'contract-consent');
     await _tapKey(tester, 'contract-sign');
 
@@ -184,9 +195,9 @@ void main() {
     expect(find.textContaining('+254 ••• 111'), findsWidgets);
     await tester.enterText(find.byKey(const ValueKey('payout-code')), fakeOtp);
     await _tapKey(tester, 'payout-verify');
-    expect(find.textContaining('Verified'), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+    // Verifying returns to the step list, like the other steps.
+    expect(find.text('Replace destination'), findsNothing);
+    expect(find.text('Submit for review'), findsOneWidget);
 
     await _tapText(tester, 'Submit for review');
     expect(find.text('Under review'), findsOneWidget);
