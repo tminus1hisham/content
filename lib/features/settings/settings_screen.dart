@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import 'update_tile.dart';
 
 /// Small section label above a grouped card.
 class SettingsHeader extends StatelessWidget {
@@ -152,6 +154,8 @@ class SettingsScreen extends StatelessWidget {
                 title: 'App icon & disguise',
                 onTap: () => context.push('/settings/disguise'),
               ),
+              if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+                const UpdateTile(),
             ],
           ),
           const SettingsHeader('Security & privacy'),
