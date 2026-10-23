@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../app/schedule_picker.dart';
 import '../../core/api_client.dart';
 import '../../core/money.dart';
 import '../onboarding/onboarding_controller.dart';
@@ -281,27 +282,8 @@ class _ComposerScreenState extends ConsumerState<ComposerScreen> {
   }
 
   Future<void> _pickSchedule() async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(now.add(const Duration(hours: 1))),
-    );
-    if (time == null) return;
-    setState(
-      () => _publishAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      ),
-    );
+    final at = await showSchedulePicker(context, initial: _publishAt);
+    if (at != null && mounted) setState(() => _publishAt = at);
   }
 
   int? get _priceKes => int.tryParse(_price.text);
@@ -480,6 +462,7 @@ class _ComposerScreenState extends ConsumerState<ComposerScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.schedule),
+              onTap: _pickSchedule,
               title: Text(
                 _publishAt == null
                     ? 'Publish now'
