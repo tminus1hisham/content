@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/theme.dart';
 import '../../core/api_client.dart';
 import '../../core/money.dart';
 import '../commerce/commerce_api.dart';
@@ -97,19 +98,34 @@ class CreatorList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       itemCount: creators.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 6),
       itemBuilder: (context, i) {
         final c = creators[i];
         return ListTile(
-          leading: CircleAvatar(child: Text(c.displayName[0])),
-          title: Text(c.displayName),
+          tileColor: scheme.surfaceContainerLow,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(cardRadius)),
+          ),
+          leading: CircleAvatar(
+            backgroundColor: scheme.primaryContainer,
+            foregroundColor: scheme.onPrimaryContainer,
+            child: Text(c.displayName[0]),
+          ),
+          title: Text(c.displayName, style: text.titleMedium),
           subtitle: Text(
             '@${c.handle} · ${c.categories.join(', ')}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
-          trailing: c.isFollowing ? const Icon(Icons.favorite, size: 18) : null,
+          trailing: c.isFollowing
+              ? Icon(Icons.favorite, size: 18, color: scheme.primary)
+              : null,
           onTap: () => context.push('/c/${c.handle}'),
         );
       },
@@ -251,17 +267,25 @@ class _CreatorBodyState extends ConsumerState<_CreatorBody> {
                               ),
                             ],
                           ),
-                          Text('${c.followers} followers'),
+                          Text(
+                            '${c.followers} followers',
+                            style: text.labelLarge?.copyWith(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                if (c.bio.isNotEmpty) Text(c.bio, style: text.bodyLarge),
                 const SizedBox(height: 12),
-                if (c.bio.isNotEmpty) Text(c.bio),
-                const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
+                  runSpacing: 8,
                   children: [
                     for (final category in c.categories)
                       Chip(label: Text(category)),
@@ -329,15 +353,18 @@ class _CreatorBodyState extends ConsumerState<_CreatorBody> {
               const SliverToBoxAdapter(
                 child: Center(child: Text('No posts yet')),
               ),
-            SliverGrid.builder(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                childAspectRatio: 0.8,
-                mainAxisSpacing: 2,
-                crossAxisSpacing: 2,
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              sliver: SliverGrid.builder(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 220,
+                  childAspectRatio: 0.7,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                ),
+                itemCount: items.length,
+                itemBuilder: (context, i) => PostTile(post: items[i]),
               ),
-              itemCount: items.length,
-              itemBuilder: (context, i) => PostTile(post: items[i]),
             ),
           ],
         ),
@@ -352,13 +379,16 @@ class PostTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => context.push('/p/${post.id}'),
-      child: Semantics(
-        label: post.locked ? 'Locked post: ${post.caption}' : post.caption,
-        child: post.locked || post.media.isEmpty
-            ? LockedMedia(post: post)
-            : MediaView(mediaId: post.media.first.id),
+    return ClipRRect(
+      borderRadius: const BorderRadius.all(Radius.circular(cardRadius)),
+      child: InkWell(
+        onTap: () => context.push('/p/${post.id}'),
+        child: Semantics(
+          label: post.locked ? 'Locked post: ${post.caption}' : post.caption,
+          child: post.locked || post.media.isEmpty
+              ? LockedMedia(post: post)
+              : MediaView(mediaId: post.media.first.id),
+        ),
       ),
     );
   }
@@ -403,16 +433,24 @@ class PostDetailScreen extends ConsumerWidget {
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 600),
-                child: AspectRatio(
-                  aspectRatio: 4 / 5,
-                  child: post.locked
-                      ? LockedMedia(post: post)
-                      : PageView(
-                          children: [
-                            for (final m in post.media)
-                              MediaView(mediaId: m.id, fit: BoxFit.contain),
-                          ],
-                        ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.all(
+                      Radius.circular(cardRadius),
+                    ),
+                    child: AspectRatio(
+                      aspectRatio: 4 / 5,
+                      child: post.locked
+                          ? LockedMedia(post: post)
+                          : PageView(
+                              children: [
+                                for (final m in post.media)
+                                  MediaView(mediaId: m.id, fit: BoxFit.contain),
+                              ],
+                            ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -429,22 +467,36 @@ class PostDetailScreen extends ConsumerWidget {
           ? null
           : SafeArea(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(switch (locked.access) {
-                      'paid' =>
-                        'One-time purchase: permanent access to this post '
-                            '(${locked.media.length} item'
-                            '${locked.media.length == 1 ? '' : 's'}). '
-                            'Price in KES, all fees included.',
-                      'subscribers' =>
-                        'Available to subscribers of @${locked.creatorHandle}.',
-                      _ => 'Follow @${locked.creatorHandle} to see this post.',
-                    }, style: Theme.of(context).textTheme.bodySmall),
-                    const SizedBox(height: 8),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHigh,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(cardRadius),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(switch (locked.access) {
+                          'paid' =>
+                            'One-time purchase: permanent access to this post '
+                                '(${locked.media.length} item'
+                                '${locked.media.length == 1 ? '' : 's'}). '
+                                'Price in KES, all fees included.',
+                          'subscribers' =>
+                            'Available to subscribers of @${locked.creatorHandle}.',
+                          _ =>
+                            'Follow @${locked.creatorHandle} to see this post.',
+                        }, style: Theme.of(context).textTheme.bodyMedium),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     FilledButton(
                       key: const ValueKey('unlock'),
                       onPressed: () => locked.access == 'followers'
