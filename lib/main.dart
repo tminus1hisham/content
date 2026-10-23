@@ -10,6 +10,7 @@ import 'features/disguise/disguise_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerFontLicenses();
   final prefs = await SharedPreferences.getInstance();
   runApp(
     ProviderScope(

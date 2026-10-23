@@ -60,6 +60,8 @@ class SecurityScreen extends ConsumerWidget {
             title: const Text('Lock again'),
             enabled: hasPin,
             trailing: DropdownButton<int>(
+              borderRadius: BorderRadius.circular(16),
+              underline: const SizedBox.shrink(),
               value: ref.watch(relockProvider),
               onChanged: hasPin
                   ? (v) => ref.read(relockProvider.notifier).set(v!)
