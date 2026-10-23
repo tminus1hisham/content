@@ -160,7 +160,14 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
         textStyle: buttonText,
       ),
     ),
-    textButtonTheme: TextButtonThemeData(style: cancelStyle),
+    // Inline links (policy, "Type it instead") stay compact; dialog cancel keeps 52.
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        minimumSize: const Size(48, 44),
+        shape: controlShape,
+        textStyle: buttonText,
+      ),
+    ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         shape: const WidgetStatePropertyAll(StadiumBorder()),
