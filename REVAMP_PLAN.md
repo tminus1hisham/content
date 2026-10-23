@@ -126,10 +126,10 @@ Discover exercises a header, search, filters, a list, all states, navigation and
 | 2 | Inbox + chat | `messages/messages_screens.dart` | `CreatorAvatar` rows, unread dot, bubbles on brand tones, composer pill with blur | ☑ |
 | 3 | Live | `live/live_screens.dart` | Live cards with a gradient ring; the "LIVE" badge pulses for at most 3 cycles (no endless animation, because of `pumpAndSettle`); room chat overlay with blur | ☑ |
 | 4 | Commerce | `commerce/commerce_screens.dart` | Checkout summary card, `BrandButton` Pay, M-Pesa status steps animated, earnings figures tabular | ☑ |
-| 5 | Creator home + studio | `content/studio_screens.dart`, `app/schedule_picker.dart` | Stat cards, post grid, composer access selector as pills | ☐ |
-| 6 | Onboarding | `onboarding/onboarding_screens.dart` | Step progress with gradient track, cards per step | ☐ |
-| 7 | Auth | `auth/auth_screens.dart`, `app/birth_date_picker.dart` | Welcome on `GlowBackground` + hero logo, `BrandButton`, OTP cells | ☐ |
-| 8 | Lock | `disguise/lock_gate.dart`, `disguise/pin_pad.dart` | PIN dots and keys with `Pressable` + haptics (only when no disguise is active) | ☐ |
+| 5 | Creator home + studio | `content/studio_screens.dart`, `app/schedule_picker.dart` | Stat cards, post grid, composer access selector as pills | ☑ |
+| 6 | Onboarding | `onboarding/onboarding_screens.dart` | Step progress with gradient track, cards per step | ☑ |
+| 7 | Auth | `auth/auth_screens.dart`, `app/birth_date_picker.dart` | Welcome on `GlowBackground` + hero logo, `BrandButton`, OTP cells | ☑ |
+| 8 | Lock | `disguise/lock_gate.dart`, `disguise/pin_pad.dart` | PIN dots and keys with `Pressable` + haptics (only when no disguise is active) | ☑ |
 
 Each row:
 - Behaviour stays identical: handlers, API calls, routes, keys and copy.
@@ -164,8 +164,8 @@ Execution:
 - [x] Pilot: Discover, Following, Creator page, Post detail, LockedMedia. `flutter analyze` clean, 104/104 tests, screenshots at 390 (dark/light) and 1280
 - [x] Checkpoint approval (approve, commit per page)
 - [x] Rows 1–4 merged (profile/settings, inbox/chat, live, commerce): analyze clean, 104/104 on the merged branch
-- [ ] Rows 5–8 (studio, onboarding, auth, lock)
-- [ ] Consistency sweep: commerce icon tiles use `primaryContainer` (muddy maroon); match settings' `surfaceContainerHighest` + `primary` icon
+- [x] Rows 5–8 merged (studio, onboarding, auth, lock); `_edgeToEdge` removed, every tab scrolls under the frosted bar
+- [x] Consistency sweep: `secondaryContainer` neutral accent tint (tonal buttons, icon tiles), flat snackbars, `tabAppBar` large titles on Following / Live now / Go live / Messages, header-led creator Home
 
 ## Learned in the pilot (apply to every row)
 - **Tab screens and the frosted bar.** The shell uses `extendBody`, so a tab screen must add `MediaQuery.paddingOf(context).bottom` to its scroll padding. Until it does, list its path outside `_edgeToEdge` in `router.dart` (it gets a `SafeArea`). Add each revamped tab path to `_edgeToEdge`, and delete the set once all are in.
