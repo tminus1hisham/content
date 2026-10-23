@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/money.dart';
 import '../commerce/commerce_api.dart';
+import '../messages/messages_screens.dart';
 import 'content_api.dart';
 import 'media_view.dart';
 
@@ -150,9 +151,17 @@ class CreatorPage extends ConsumerWidget {
         title: Text('@$handle'),
         actions: [
           PopupMenuButton<String>(
-            onSelected: (_) => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Thanks. Our team will review it.')),
-            ),
+            onSelected: (_) {
+              final id = creator.valueOrNull?.id;
+              if (id != null) {
+                showReportDialog(
+                  context,
+                  ref,
+                  targetType: 'user',
+                  targetId: id,
+                );
+              }
+            },
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'report', child: Text('Report')),
             ],
@@ -274,7 +283,14 @@ class _CreatorBodyState extends ConsumerState<_CreatorBody> {
                               child: const Text('Follow'),
                             ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
+                    IconButton.outlined(
+                      key: const ValueKey('message-creator'),
+                      tooltip: 'Message',
+                      onPressed: () => openChat(context, ref, c.id),
+                      icon: const Icon(Icons.chat_bubble_outline),
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: FilledButton(
                         key: const ValueKey('subscribe'),
@@ -358,7 +374,21 @@ class PostDetailScreen extends ConsumerWidget {
     final value = ref.watch(postProvider(id));
     final locked = value.valueOrNull?.locked == true ? value.valueOrNull : null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Post')),
+      appBar: AppBar(
+        title: const Text('Post'),
+        actions: [
+          IconButton(
+            tooltip: 'Report',
+            onPressed: () => showReportDialog(
+              context,
+              ref,
+              targetType: 'post',
+              targetId: id,
+            ),
+            icon: const Icon(Icons.flag_outlined),
+          ),
+        ],
+      ),
       body: asyncBody(
         value,
         () => ref.invalidate(postProvider(id)),

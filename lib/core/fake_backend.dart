@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../features/auth/fake_auth.dart';
 import '../features/commerce/fake_commerce.dart';
 import '../features/content/fake_content.dart';
+import '../features/messages/fake_messaging.dart';
 import '../features/onboarding/fake_onboarding.dart';
 
 /// Returns `(statusCode, jsonBody)`. [params] holds `{id}`-style path segments.
@@ -17,6 +18,7 @@ final Map<String, FakeHandler> fakeRoutes = {
   ...fakeOnboardingDb.routes,
   ...fakeContentDb.routes,
   ...fakeCommerceDb.routes,
+  ...fakeMessagingDb.routes,
 };
 
 /// Restores every fake table to its seed data.
@@ -25,6 +27,7 @@ void resetFakeBackend() {
   fakeOnboardingDb.reset();
   fakeContentDb.reset();
   fakeCommerceDb.reset();
+  fakeMessagingDb.reset(); // after content: it seeds attachment media
 }
 
 /// Simulated network delay; tests set it to zero.

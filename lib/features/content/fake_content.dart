@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/fake_backend.dart';
 import '../auth/fake_auth.dart';
+import '../messages/fake_messaging.dart';
 import '../onboarding/fake_onboarding.dart';
 
 /// In-memory media, posts, discovery and follows (IT.md §9.6–9.7).
@@ -294,6 +295,7 @@ class FakeContentDb {
       if (item == null) return _notFound;
       final allowed =
           item.ownerId == userId ||
+          fakeMessagingDb.canViewMedia(item.id, userId) ||
           _posts.values.any(
             (p) => p.mediaIds.contains(item.id) && _canView(p, userId),
           );

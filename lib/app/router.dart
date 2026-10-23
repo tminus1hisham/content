@@ -10,6 +10,7 @@ import '../features/disguise/lock_gate.dart';
 import '../features/commerce/commerce_screens.dart';
 import '../features/content/discover_screens.dart';
 import '../features/content/studio_screens.dart';
+import '../features/messages/messages_screens.dart';
 import '../features/onboarding/onboarding_screens.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/settings/appearance_screen.dart';
@@ -77,6 +78,8 @@ final _tabScreens = <String, Widget Function()>{
   '/discover': DiscoverScreen.new,
   '/following': FollowingScreen.new,
   '/studio': StudioScreen.new,
+  '/inbox': InboxScreen.new,
+  '/messages': InboxScreen.new,
 };
 
 /// Rebuilt when the role changes, which swaps the bottom-nav shell. Lock and
@@ -150,6 +153,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/library', builder: (_, _) => const LibraryScreen()),
+      GoRoute(
+        path: '/chat/:id',
+        builder: (_, state) => ChatScreen(id: state.pathParameters['id']!),
+      ),
       GoRoute(
         path: '/earnings',
         builder: (_, _) => const EarningsScreen(),

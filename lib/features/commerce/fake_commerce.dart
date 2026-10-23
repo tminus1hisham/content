@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../core/fake_backend.dart';
 import '../auth/fake_auth.dart';
 import '../content/fake_content.dart';
+import '../messages/fake_messaging.dart';
 import '../onboarding/fake_onboarding.dart';
 
 /// In-memory orders, M-Pesa payments, entitlements, subscriptions, ledger and
@@ -225,7 +226,7 @@ class FakeCommerceDb {
       _Tx(
         't-${order.id}',
         order.creatorId,
-        order.type == 'post' ? 'sale' : 'subscription',
+        order.type == 'subscription' ? 'subscription' : 'sale',
         order.description,
         order.amountCents,
         commissionOf(order.amountCents),
@@ -235,6 +236,8 @@ class FakeCommerceDb {
     );
     if (order.type == 'post') {
       fakeContentDb.grantPurchase(order.fanId, order.itemId);
+    } else if (order.type == 'message') {
+      fakeMessagingDb.unlock(order.fanId, order.itemId);
     } else {
       final existing = _subscriptions.values.where(
         (s) => s.fanId == order.fanId && s.creatorId == order.creatorId,
@@ -361,6 +364,15 @@ class FakeCommerceDb {
         amount = post.priceCents;
         final handle = fakeContentDb.creatorProfile(creatorId)?['handle'];
         description = 'Post by @$handle';
+      } else if (type == 'message') {
+        final message = fakeMessagingDb.paidMessage(itemId, userId);
+        if (message == null) {
+          return _error(400, 'NOT_PURCHASABLE', 'This item is not for sale');
+        }
+        creatorId = message.creatorId;
+        amount = message.priceCents;
+        final handle = fakeContentDb.creatorProfile(creatorId)?['handle'];
+        description = 'Message attachment from @$handle';
       } else if (type == 'subscription') {
         if (fakeContentDb.creatorProfile(itemId) == null) {
           return _error(400, 'NOT_PURCHASABLE', 'Creator not found');

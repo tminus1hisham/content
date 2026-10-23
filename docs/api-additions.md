@@ -100,3 +100,17 @@ Every amount is an integer in cents, in KES. The app only **displays** amounts. 
 | `POST /creators/me/payout-requests` | `{amountCents, payoutMethodId, idempotencyKey}` | `201 {id, amountCents, currency, destination, status, createdAt}`. Moves the amount from available to reserved. Errors: `400 AMOUNT_OUT_OF_RANGE`, `400 INSUFFICIENT_BALANCE`, `400 DESTINATION_NOT_VERIFIED`, `403 CREATOR_NOT_APPROVED` |
 
 Subscriptions are started through `POST /orders` with `type: subscription`, not through `POST /subscriptions`, so every payment goes through the same order, payment and ledger path.
+
+## Messaging and reports (§9.11–9.12)
+
+| Endpoint | Request | Response and errors |
+| --- | --- | --- |
+| `GET /conversations` | — | `[{id, other: {id, displayName, handle?}, blocked, lastMessage}]`. A fan's email or phone is **never** included in `other` |
+| `POST /conversations` | `{userId}` | `{id, other}`. Returns the existing conversation if there is one. `403 NOT_ALLOWED` for fan-to-fan, `403 BLOCKED` |
+| `GET /conversations/{id}/messages` | — | `{other, blocked, blockedByMe, messages: [{id, senderId, text, createdAt, attachment?: {mediaId, priceCents, locked}}]}`. **`mediaId` is null while `locked`** |
+| `POST /conversations/{id}/messages` | `{text, attachment?: {mediaId, priceCents}}` | `201` with the message. Errors: `403 BLOCKED`, `400 EMPTY_MESSAGE`, `400 TOO_LONG` (over 2000 characters). Attachments add `403 CREATOR_NOT_APPROVED`, `400 MEDIA_REQUIRED` and `400 PRICE_OUT_OF_RANGE` |
+| Buying an attachment | — | Use `POST /orders` with `{type: "message", itemId: <messageId>}`, then the normal checkout. The app does not use `POST /messages/{id}/unlock` |
+| `POST`/`DELETE /users/{id}/block` | — | `204` |
+| `POST /reports` | `{targetType: user\|post\|message, targetId, reason: minor\|non_consensual\|harassment\|impersonation\|scam\|other, details}` | `201 {caseId, priority: urgent\|normal, status}`. `minor` and `non_consensual` are **urgent** (FR-SAF-003) |
+
+The app polls the open thread every 5 s. Tell us if you add a realtime transport (WebSocket or SSE).
