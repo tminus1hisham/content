@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../features/auth/auth_controller.dart' show isAdult;
+import 'motion.dart';
+import 'theme.dart';
+import 'ui.dart';
 
 /// Wheel bottom sheet for the 18+ gate. Returns the chosen date, or null when
 /// dismissed. The wheel starts at today and Continue stays disabled until the
@@ -68,7 +71,7 @@ class _BirthDateSheetState extends State<_BirthDateSheet> {
     const tabular = [FontFeature.tabularFigures()];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -77,7 +80,7 @@ class _BirthDateSheetState extends State<_BirthDateSheet> {
             'Date of birth',
             style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           Wrap(
             spacing: 12,
             runSpacing: 8,
@@ -91,7 +94,9 @@ class _BirthDateSheetState extends State<_BirthDateSheet> {
                 ),
               ),
               if (_moved)
-                Container(
+                AnimatedContainer(
+                  duration: motion(context, shortDuration),
+                  curve: easeOut,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 4,
@@ -121,7 +126,7 @@ class _BirthDateSheetState extends State<_BirthDateSheet> {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           SizedBox(
             height: 216,
             child: CupertinoTheme(
@@ -144,11 +149,23 @@ class _BirthDateSheetState extends State<_BirthDateSheet> {
                 maximumYear: widget.now.year,
                 selectionOverlayBuilder:
                     (context, {required columnCount, required selectedIndex}) =>
+                        // One lit band across all columns, not three pills.
                         Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
                           decoration: BoxDecoration(
                             color: scheme.primary.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.horizontal(
+                              left: selectedIndex == 0
+                                  ? const Radius.circular(controlRadius)
+                                  : Radius.zero,
+                              right: selectedIndex == columnCount - 1
+                                  ? const Radius.circular(controlRadius)
+                                  : Radius.zero,
+                            ),
+                            border: Border.symmetric(
+                              horizontal: BorderSide(
+                                color: scheme.outlineVariant,
+                              ),
+                            ),
                           ),
                         ),
                 onDateTimeChanged: (value) => setState(() {
@@ -158,12 +175,18 @@ class _BirthDateSheetState extends State<_BirthDateSheet> {
               ),
             ),
           ),
-          const SizedBox(height: 8),
-          FilledButton(
-            key: const ValueKey('dob-continue'),
-            onPressed: _moved ? () => Navigator.of(context).pop(_chosen) : null,
-            child: const Text('Continue'),
+          const SizedBox(height: 16),
+          Pressable(
+            child: FilledButton(
+              key: const ValueKey('dob-continue'),
+              style: brandButtonStyle(context),
+              onPressed: _moved
+                  ? () => Navigator.of(context).pop(_chosen)
+                  : null,
+              child: const Text('Continue'),
+            ),
           ),
+          const SizedBox(height: 4),
           TextButton(
             key: const ValueKey('dob-type'),
             onPressed: _typeInstead,

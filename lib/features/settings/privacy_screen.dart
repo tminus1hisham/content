@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/ui.dart';
 import '../../core/api_client.dart';
 import '../auth/auth_controller.dart';
+import 'settings_screen.dart';
 
 typedef _Json = Map<String, dynamic>;
 
@@ -149,97 +151,128 @@ class PrivacyScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final text = Theme.of(context).textTheme;
-    Widget header(String title) => Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Text(title, style: text.titleSmall),
-    );
+    final error = Theme.of(context).colorScheme.error;
+    const tilePadding = EdgeInsets.symmetric(horizontal: 16);
     final prefs = ref.watch(_preferencesProvider).valueOrNull;
-    final sessions = ref.watch(_sessionsProvider).valueOrNull ?? const [];
+    final sessionsAsync = ref.watch(_sessionsProvider);
+    final sessions = sessionsAsync.valueOrNull ?? const [];
     final blocks = ref.watch(_blocksProvider).valueOrNull ?? const [];
     return Scaffold(
       appBar: AppBar(title: const Text('Privacy')),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
-          header('Notifications'),
-          for (final MapEntry(:key, value: (title, subtitle))
-              in _notificationPrefs.entries)
-            SwitchListTile(
-              key: ValueKey('pref-$key'),
-              title: Text(title),
-              subtitle: Text(subtitle),
-              value: prefs?[key] == true,
-              onChanged: prefs == null
-                  ? null
-                  : (v) => _setPref(ref, context, key, v),
-            ),
-          header('Active sessions'),
-          for (final s in sessions)
-            ListTile(
-              leading: const Icon(Icons.devices),
-              title: Text(
-                '${s['device']}${s['current'] == true ? ' (this device)' : ''}',
-              ),
-              subtitle: Text(
-                'Signed in ${MaterialLocalizations.of(context).formatMediumDate(DateTime.parse(s['createdAt'] as String).toLocal())}',
-              ),
-              trailing: TextButton(
-                onPressed: () => _revoke(ref, context, s),
-                child: const Text('Sign out'),
-              ),
-            ),
-          header('Blocked accounts'),
-          if (blocks.isEmpty)
-            const ListTile(title: Text('You have not blocked anyone')),
-          for (final b in blocks)
-            ListTile(
-              leading: const Icon(Icons.block),
-              title: Text(b['displayName'] as String),
-              trailing: TextButton(
-                onPressed: () => _unblock(ref, context, b),
-                child: const Text('Unblock'),
-              ),
-            ),
-          header('Your data'),
-          ListTile(
-            leading: const Icon(Icons.download_outlined),
-            title: const Text('Request a copy of my data'),
-            onTap: () => _exportData(ref, context),
-          ),
-          ListTile(
-            leading: const Icon(Icons.policy_outlined),
-            title: const Text('Privacy notice'),
-            onTap: () => showDialog<void>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Privacy notice'),
-                content: const Text(
-                  'We collect what we need to run your account, process '
-                  'payments and keep the platform safe. Creators never see '
-                  'your email, phone number or payment details. The full '
-                  'notice will be published here.',
+          const SettingsHeader('Notifications'),
+          SettingsGroup(
+            children: [
+              for (final MapEntry(:key, value: (title, subtitle))
+                  in _notificationPrefs.entries)
+                SwitchListTile(
+                  key: ValueKey('pref-$key'),
+                  contentPadding: tilePadding,
+                  title: Text(title),
+                  subtitle: Text(subtitle),
+                  value: prefs?[key] == true,
+                  onChanged: prefs == null
+                      ? null
+                      : (v) => _setPref(ref, context, key, v),
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
+            ],
+          ),
+          const SettingsHeader('Active sessions'),
+          SettingsGroup(
+            children: [
+              if (sessionsAsync.isLoading && sessions.isEmpty)
+                const Shimmer(
+                  child: ListTile(
+                    contentPadding: tilePadding,
+                    leading: Skeleton(width: 36, height: 36, radius: 12),
+                    title: Skeleton(width: 140),
                   ),
-                ],
+                ),
+              for (final s in sessions)
+                ListTile(
+                  contentPadding: tilePadding,
+                  leading: const SettingsIcon(Icons.devices),
+                  title: Text(
+                    '${s['device']}${s['current'] == true ? ' (this device)' : ''}',
+                  ),
+                  subtitle: Text(
+                    'Signed in ${MaterialLocalizations.of(context).formatMediumDate(DateTime.parse(s['createdAt'] as String).toLocal())}',
+                  ),
+                  trailing: TextButton(
+                    onPressed: () => _revoke(ref, context, s),
+                    child: const Text('Sign out'),
+                  ),
+                ),
+            ],
+          ),
+          const SettingsHeader('Blocked accounts'),
+          SettingsGroup(
+            children: [
+              if (blocks.isEmpty)
+                const ListTile(
+                  contentPadding: tilePadding,
+                  leading: SettingsIcon(Icons.check_circle_outline),
+                  title: Text('You have not blocked anyone'),
+                ),
+              for (final b in blocks)
+                ListTile(
+                  contentPadding: tilePadding,
+                  leading: const SettingsIcon(Icons.block),
+                  title: Text(b['displayName'] as String),
+                  trailing: TextButton(
+                    onPressed: () => _unblock(ref, context, b),
+                    child: const Text('Unblock'),
+                  ),
+                ),
+            ],
+          ),
+          const SettingsHeader('Your data'),
+          SettingsGroup(
+            children: [
+              SettingsTile(
+                icon: Icons.download_outlined,
+                title: 'Request a copy of my data',
+                chevron: false,
+                onTap: () => _exportData(ref, context),
               ),
-            ),
+              SettingsTile(
+                icon: Icons.policy_outlined,
+                title: 'Privacy notice',
+                onTap: () => showDialog<void>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Privacy notice'),
+                    content: const Text(
+                      'We collect what we need to run your account, process '
+                      'payments and keep the platform safe. Creators never see '
+                      'your email, phone number or payment details. The full '
+                      'notice will be published here.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              ListTile(
+                contentPadding: tilePadding,
+                leading: SettingsIcon(
+                  Icons.delete_forever_outlined,
+                  color: error,
+                ),
+                title: Text(
+                  'Delete my account',
+                  style: TextStyle(color: error),
+                ),
+                onTap: () => _deleteAccount(ref, context),
+              ),
+            ],
           ),
-          ListTile(
-            leading: Icon(
-              Icons.delete_forever_outlined,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            title: Text(
-              'Delete my account',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            onTap: () => _deleteAccount(ref, context),
-          ),
-          const SizedBox(height: 24),
         ],
       ),
     );

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/motion.dart';
+import '../../app/theme.dart';
+import '../../app/ui.dart';
 import '../../core/api_client.dart';
 import '../../core/money.dart';
 import '../content/discover_screens.dart';
@@ -30,70 +34,402 @@ String _accessLabel(_Json s) => switch (s['access']) {
   _ => 'Free',
 };
 
+/// Side gutter that centres a [maxWidth] column on wide screens.
+double _gutter(BuildContext context, double maxWidth) =>
+    math.max(16, (MediaQuery.sizeOf(context).width - maxWidth) / 2);
+
+IconData _accessIcon(_Json s) => switch (s['access']) {
+  'ticketed' => Icons.confirmation_number_outlined,
+  'subscribers' => Icons.star_outline_rounded,
+  _ => Icons.public,
+};
+
+String _liveFor(_Json s) {
+  final started = DateTime.tryParse(s['startedAt'] as String? ?? '');
+  final minutes = started == null
+      ? 0
+      : DateTime.now().toUtc().difference(started).inMinutes;
+  return minutes < 1 ? 'Just started' : 'Live for $minutes min';
+}
+
 /// Fan "Live" tab.
 class LiveNowScreen extends ConsumerWidget {
   const LiveNowScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Clears the frosted tab bar (the shell draws this screen edge to edge).
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    final gutter = _gutter(context, 640);
     return Scaffold(
-      appBar: AppBar(title: const Text('Live now')),
-      body: asyncBody(
-        ref.watch(liveNowProvider),
-        () => ref.invalidate(liveNowProvider),
-        (sessions) => RefreshIndicator(
-          onRefresh: () => ref.refresh(liveNowProvider.future),
-          child: sessions.isEmpty
-              ? ListView(
-                  children: const [
-                    SizedBox(height: 120),
-                    Center(child: Text('Nobody is live right now')),
-                  ],
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(12),
-                  children: [
-                    for (final s in sessions)
-                      Card(
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            child: Text(
-                              ((s['creator'] as _Json)['displayName']
-                                  as String)[0],
+      appBar: tabAppBar(context, 'Live now'),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlowBackground()),
+          asyncBody(
+            ref.watch(liveNowProvider),
+            () => ref.invalidate(liveNowProvider),
+            loading: () => const SkeletonList(count: 3, itemHeight: 220),
+            (sessions) => RefreshIndicator(
+              onRefresh: () => ref.refresh(liveNowProvider.future),
+              child: sessions.isEmpty
+                  ? CustomScrollView(
+                      slivers: [
+                        SliverFillRemaining(
+                          child: Padding(
+                            padding: EdgeInsets.only(bottom: bottom),
+                            child: const StateView(
+                              icon: Icons.sensors_off_outlined,
+                              title: 'Nobody is live right now',
+                              message: 'Pull down to check again.',
                             ),
                           ),
-                          title: Text(s['title'] as String),
-                          subtitle: Text(
-                            '${(s['creator'] as _Json)['displayName']} · '
-                            '${_accessLabel(s)}',
-                          ),
-                          trailing: const _LiveBadge(),
-                          onTap: () => context.push('/live/${s['id']}'),
+                        ),
+                      ],
+                    )
+                  : ListView.separated(
+                      padding: EdgeInsets.fromLTRB(
+                        gutter,
+                        8,
+                        gutter,
+                        24 + bottom,
+                      ),
+                      itemCount: sessions.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 14),
+                      itemBuilder: (context, i) => Entrance(
+                        key: ValueKey(sessions[i]['id']),
+                        index: i,
+                        child: _LiveCard(session: sessions[i]),
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A live session as a lit stage: the host's cover, their ringed avatar and
+/// the access terms, then the title.
+class _LiveCard extends StatelessWidget {
+  const _LiveCard({required this.session});
+  final _Json session;
+
+  static const _stageHeight = 156.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = session;
+    final creator = s['creator'] as _Json;
+    final name = creator['displayName'] as String;
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final muted = text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
+    return Pressable(
+      child: Material(
+        color: scheme.surfaceContainerLow,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(cardRadius)),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+        child: InkWell(
+          onTap: () => context.push('/live/${s['id']}'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: _stageHeight,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CreatorBanner(id: creator['id'] as String),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.18),
+                            Colors.black.withValues(alpha: 0),
+                            Colors.black.withValues(alpha: 0.28),
+                          ],
                         ),
                       ),
+                    ),
+                    Center(
+                      child: CreatorAvatar(
+                        id: creator['id'] as String,
+                        name: name,
+                        size: 68,
+                        ring: true,
+                      ),
+                    ),
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      right: 12,
+                      child: Row(
+                        children: [
+                          const _LiveBadge(),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: _RoomGlass(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _accessIcon(s),
+                                      size: 15,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        _accessLabel(s),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: text.labelMedium?.copyWith(
+                                          color: Colors.white,
+                                          fontFeatures: const [
+                                            FontFeature.tabularFigures(),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      s['title'] as String,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: muted,
+                          ),
+                        ),
+                        if (creator['verified'] == true) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.verified,
+                            size: 15,
+                            color: scheme.primary,
+                            semanticLabel: 'Verified creator',
+                          ),
+                        ],
+                        Text(' · ', style: muted),
+                        Flexible(
+                          child: Text(
+                            _liveFor(s),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: muted?.copyWith(
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _LiveBadge extends StatelessWidget {
+/// "LIVE" in the accent. The dot breathes three times on arrival, then rests:
+/// it is a signal, not a loop.
+class _LiveBadge extends StatefulWidget {
   const _LiveBadge();
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-    decoration: BoxDecoration(
-      color: Colors.red,
-      borderRadius: BorderRadius.circular(4),
-    ),
-    child: const Text(
-      'LIVE',
-      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-    ),
+  State<_LiveBadge> createState() => _LiveBadgeState();
+}
+
+class _LiveBadgeState extends State<_LiveBadge>
+    with SingleTickerProviderStateMixin {
+  late final _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 600),
   );
+  late final _dot = Tween(
+    begin: 1.0,
+    end: 0.3,
+  ).animate(CurvedAnimation(parent: _pulse, curve: easeInOut));
+  var _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    // Out and back is two runs, so three breaths.
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      _pulse.repeat(reverse: true, count: 6);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: scheme.primary,
+        borderRadius: const BorderRadius.all(Radius.circular(999)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FadeTransition(
+            opacity: _dot,
+            child: Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: scheme.onPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            'LIVE',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: scheme.onPrimary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Frosted chrome laid over video or a cover: dark, so white reads on it in
+/// either theme.
+class _RoomGlass extends StatelessWidget {
+  const _RoomGlass({
+    super.key,
+    required this.child,
+    this.radius = 999,
+    this.padding = EdgeInsets.zero,
+  });
+  final Widget child;
+  final double radius;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) => Glass(
+    borderRadius: BorderRadius.all(Radius.circular(radius)),
+    color: Colors.black.withValues(alpha: 0.34),
+    border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+    child: Padding(padding: padding, child: child),
+  );
+}
+
+/// A grouped block of the setup form, under a quiet label.
+class _Group extends StatelessWidget {
+  const _Group({required this.label, required this.child});
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
+          child: Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ),
+        Card(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: child,
+        ),
+      ],
+    );
+  }
+}
+
+class _Check extends StatelessWidget {
+  const _Check({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: scheme.primary.withValues(alpha: 0.12),
+          borderRadius: const BorderRadius.all(Radius.circular(controlRadius)),
+        ),
+        child: Icon(icon, size: 20, color: scheme.primary),
+      ),
+      title: Text(title),
+      subtitle: Text(subtitle),
+    );
+  }
 }
 
 /// Creator "Go live" tab: setup and safety checks (IT.md §6 creator flow).
@@ -159,106 +495,143 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
   Widget build(BuildContext context) {
     final approved = ref.watch(creatorApprovedProvider);
     final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    // Clears the frosted tab bar (the shell draws this screen edge to edge).
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    final gutter = _gutter(context, 560);
     return Scaffold(
-      appBar: AppBar(title: const Text('Go live')),
+      appBar: tabAppBar(context, 'Go live'),
       body: !approved
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Finish creator setup to go live.'),
-                    TextButton(
-                      onPressed: () => context.push('/onboarding'),
-                      child: const Text('Continue setup'),
-                    ),
-                  ],
+          ? Padding(
+              padding: EdgeInsets.only(bottom: bottom),
+              child: StateView(
+                icon: Icons.verified_user_outlined,
+                title: 'Finish creator setup to go live.',
+                action: TextButton(
+                  onPressed: () => context.push('/onboarding'),
+                  child: const Text('Continue setup'),
                 ),
               ),
             )
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 24 + bottom),
               children: [
-                const Card(
+                const _Group(
+                  label: 'Before you start',
                   child: Column(
                     children: [
-                      ListTile(
-                        leading: Icon(Icons.videocam_outlined),
-                        title: Text('Camera and microphone'),
-                        subtitle: Text(
-                          'You will be asked for access when the stream starts',
-                        ),
+                      _Check(
+                        icon: Icons.videocam_outlined,
+                        title: 'Camera and microphone',
+                        subtitle:
+                            'You will be asked for access when the stream starts',
                       ),
-                      ListTile(
-                        leading: Icon(Icons.wifi),
-                        title: Text('Connection'),
-                        subtitle: Text(
-                          'Use Wi-Fi or a strong 4G signal. Quality adapts '
-                          'automatically.',
-                        ),
+                      _Check(
+                        icon: Icons.wifi,
+                        title: 'Connection',
+                        subtitle:
+                            'Use Wi-Fi or a strong 4G signal. Quality adapts '
+                            'automatically.',
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  key: const ValueKey('live-title'),
-                  controller: _title,
-                  maxLength: 80,
-                  decoration: const InputDecoration(labelText: 'Stream title'),
-                ),
-                Text('Who can watch?', style: text.titleSmall),
-                const SizedBox(height: 8),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'free', label: Text('Free')),
-                    ButtonSegment(
-                      value: 'subscribers',
-                      label: Text('Subscribers'),
-                    ),
-                    ButtonSegment(value: 'ticketed', label: Text('Ticket')),
-                  ],
-                  selected: {_access},
-                  onSelectionChanged: (s) => setState(() => _access = s.first),
-                ),
-                if (_access == 'ticketed') ...[
-                  const SizedBox(height: 16),
-                  TextField(
-                    key: const ValueKey('live-price'),
-                    controller: _price,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Ticket price',
-                      prefixText: 'KSh ',
+                _Group(
+                  label: 'Stream',
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          key: const ValueKey('live-title'),
+                          controller: _title,
+                          maxLength: 80,
+                          decoration: const InputDecoration(
+                            labelText: 'Stream title',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text('Who can watch?', style: text.titleSmall),
+                        const SizedBox(height: 10),
+                        SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(value: 'free', label: Text('Free')),
+                            ButtonSegment(
+                              value: 'subscribers',
+                              label: Text('Subscribers'),
+                            ),
+                            ButtonSegment(
+                              value: 'ticketed',
+                              label: Text('Ticket'),
+                            ),
+                          ],
+                          selected: {_access},
+                          onSelectionChanged: (s) =>
+                              setState(() => _access = s.first),
+                        ),
+                        if (_access == 'ticketed') ...[
+                          const SizedBox(height: 16),
+                          TextField(
+                            key: const ValueKey('live-price'),
+                            controller: _price,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            decoration: const InputDecoration(
+                              labelText: 'Ticket price',
+                              prefixText: 'KSh ',
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 4),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Record this stream'),
+                          subtitle: const Text(
+                            'Only you can see the recording',
+                          ),
+                          value: _record,
+                          onChanged: (v) => setState(() => _record = v),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Record this stream'),
-                  subtitle: const Text('Only you can see the recording'),
-                  value: _record,
-                  onChanged: (v) => setState(() => _record = v),
                 ),
-                CheckboxListTile(
-                  key: const ValueKey('live-safety'),
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  value: _safety,
-                  onChanged: (v) => setState(() => _safety = v!),
-                  title: const Text(
-                    'Everyone on camera is 18+ and has agreed to appear. I will '
-                    'follow the content rules.',
+                _Group(
+                  label: 'Safety',
+                  // Tints once the creator has confirmed.
+                  child: AnimatedContainer(
+                    duration: motion(context, shortDuration),
+                    curve: easeOut,
+                    decoration: BoxDecoration(
+                      color: _safety
+                          ? scheme.primary.withValues(alpha: 0.08)
+                          : null,
+                    ),
+                    child: CheckboxListTile(
+                      key: const ValueKey('live-safety'),
+                      contentPadding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: _safety,
+                      onChanged: (v) => setState(() => _safety = v!),
+                      title: const Text(
+                        'Everyone on camera is 18+ and has agreed to appear. '
+                        'I will follow the content rules.',
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                FilledButton.icon(
-                  key: const ValueKey('live-start'),
-                  onPressed: _busy ? null : _start,
-                  icon: const Icon(Icons.sensors),
-                  label: const Text('Go live'),
+                const SizedBox(height: 24),
+                Pressable(
+                  child: FilledButton.icon(
+                    key: const ValueKey('live-start'),
+                    style: brandButtonStyle(context),
+                    onPressed: _busy ? null : _start,
+                    icon: const Icon(Icons.sensors),
+                    label: const Text('Go live'),
+                  ),
                 ),
               ],
             ),
@@ -418,7 +791,12 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
             children: [
               for (final amount in const [50, 100, 200, 500, 1000])
                 ActionChip(
-                  label: Text(formatKes(amount * 100)),
+                  label: Text(
+                    formatKes(amount * 100),
+                    style: const TextStyle(
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                  ),
                   onPressed: () => Navigator.pop(context, amount),
                 ),
             ],
@@ -531,10 +909,15 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Stream ended'),
-          content: Text(
-            'Duration: ${Duration(seconds: summary['durationSeconds'] as int).inMinutes} min\n'
-            'Tips: ${formatKes(summary['tipsCents'] as int)}\n'
-            'Tickets sold: ${summary['ticketsSold']}',
+          content: _Summary(
+            rows: [
+              (
+                'Duration',
+                '${Duration(seconds: summary['durationSeconds'] as int).inMinutes} min',
+              ),
+              ('Tips', formatKes(summary['tipsCents'] as int)),
+              ('Tickets sold', '${summary['ticketsSold']}'),
+            ],
           ),
           actions: [
             TextButton(
@@ -554,10 +937,33 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
   Widget build(BuildContext context) {
     final session = _session;
     if (session == null && _gate == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      // Dark like the room it opens into, so entering doesn't flash.
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: SizedBox.square(
+            dimension: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: Colors.white70,
+            ),
+          ),
+        ),
+      );
     }
     if (_gate != null) return _gateView();
     final connection = _connection;
+    Widget scrim(List<double> alphas) => IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [for (final a in alphas) Colors.black.withValues(alpha: a)],
+          ),
+        ),
+      ),
+    );
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -567,6 +973,21 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                 ? const SizedBox()
                 : connection.video(context),
           ),
+          // Shade the edges so the chrome reads over any picture.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 180,
+            child: scrim(const [0.5, 0]),
+          ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 380,
+            child: scrim(const [0, 0.7]),
+          ),
           SafeArea(
             child: Column(
               children: [
@@ -574,11 +995,21 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
                 if (_pinned != null) _pinBanner(),
                 const Spacer(),
                 if (_ended)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      'This stream has ended',
-                      style: TextStyle(color: Colors.white, fontSize: 18),
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _RoomGlass(
+                      radius: cardRadius,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                      child: Text(
+                        'This stream has ended',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleMedium?.copyWith(color: Colors.white),
+                      ),
                     ),
                   ),
                 _chat(),
@@ -596,113 +1027,166 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     final canBuy = _gateCode == 'LIVE_ACCESS_DENIED' && session != null;
     return Scaffold(
       appBar: AppBar(title: Text(session?['title'] as String? ?? 'Live')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.lock_outline, size: 48),
-              const SizedBox(height: 12),
-              Text(_gate!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              if (canBuy)
-                FilledButton(
-                  key: const ValueKey('live-buy'),
-                  onPressed: _buyAccess,
-                  child: Text(
-                    session['access'] == 'ticketed'
-                        ? 'Buy ticket · ${formatKes(session['priceCents'] as int)}'
-                        : 'Subscribe to watch',
-                  ),
-                ),
-            ],
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlowBackground()),
+          StateView(
+            icon: Icons.lock_outline,
+            title: _gate!,
+            action: canBuy
+                ? Pressable(
+                    child: FilledButton(
+                      key: const ValueKey('live-buy'),
+                      style: brandButtonStyle(context),
+                      onPressed: _buyAccess,
+                      child: Text(
+                        session['access'] == 'ticketed'
+                            ? 'Buy ticket · ${formatKes(session['priceCents'] as int)}'
+                            : 'Subscribe to watch',
+                      ),
+                    ),
+                  )
+                : null,
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _topBar(_Json session) {
-    const white = TextStyle(color: Colors.white);
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.all(8),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _LiveBadge(),
-          const SizedBox(width: 8),
-          const Icon(Icons.visibility, color: Colors.white, size: 16),
-          const SizedBox(width: 4),
-          Text('$_viewers', key: const ValueKey('live-viewers'), style: white),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              session['title'] as String,
-              style: white,
-              overflow: TextOverflow.ellipsis,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _RoomGlass(
+                  padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
+                  child: Row(
+                    children: [
+                      const _LiveBadge(),
+                      const SizedBox(width: 10),
+                      const Icon(
+                        Icons.visibility_outlined,
+                        color: Colors.white70,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$_viewers',
+                        key: const ValueKey('live-viewers'),
+                        style: text.labelLarge?.copyWith(
+                          color: Colors.white,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          session['title'] as String,
+                          maxLines: 1,
+                          style: text.titleSmall?.copyWith(color: Colors.white),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (_host)
+                TextButton(
+                  key: const ValueKey('live-end'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: scheme.error,
+                    foregroundColor: scheme.onError,
+                    minimumSize: const Size(64, 44),
+                    shape: const StadiumBorder(),
+                  ),
+                  onPressed: _end,
+                  child: const Text('End'),
+                )
+              else
+                _RoomGlass(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Report',
+                        color: Colors.white,
+                        onPressed: () => showReportDialog(
+                          context,
+                          ref,
+                          targetType: 'user',
+                          targetId:
+                              (session['creator'] as _Json)['id'] as String,
+                        ),
+                        icon: const Icon(Icons.flag_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Leave',
+                        color: Colors.white,
+                        onPressed: () => context.pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
           if (_host) ...[
-            IconButton(
-              tooltip: _mic ? 'Mute microphone' : 'Unmute microphone',
-              color: Colors.white,
-              onPressed: () {
-                setState(() => _mic = !_mic);
-                _connection?.setMicrophone(_mic);
-              },
-              icon: Icon(_mic ? Icons.mic : Icons.mic_off),
-            ),
-            IconButton(
-              tooltip: _camera ? 'Turn camera off' : 'Turn camera on',
-              color: Colors.white,
-              onPressed: () {
-                setState(() => _camera = !_camera);
-                _connection?.setCamera(_camera);
-              },
-              icon: Icon(_camera ? Icons.videocam : Icons.videocam_off),
-            ),
-            IconButton(
-              tooltip: 'Flip camera',
-              color: Colors.white,
-              onPressed: () => _connection?.flipCamera(),
-              icon: const Icon(Icons.cameraswitch_outlined),
-            ),
-            PopupMenuButton<int>(
-              tooltip: 'Slow mode',
-              iconColor: Colors.white,
-              icon: const Icon(Icons.timer_outlined),
-              onSelected: _setSlowMode,
-              itemBuilder: (_) => [
-                for (final s in const [0, 10, 30])
-                  CheckedPopupMenuItem(
-                    value: s,
-                    checked: _slowMode == s,
-                    child: Text(s == 0 ? 'Slow mode off' : 'Slow mode ${s}s'),
+            const SizedBox(height: 8),
+            _RoomGlass(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: _mic ? 'Mute microphone' : 'Unmute microphone',
+                    color: Colors.white,
+                    onPressed: () {
+                      setState(() => _mic = !_mic);
+                      _connection?.setMicrophone(_mic);
+                    },
+                    icon: Icon(_mic ? Icons.mic : Icons.mic_off),
                   ),
-              ],
-            ),
-            TextButton(
-              key: const ValueKey('live-end'),
-              onPressed: _end,
-              child: const Text('End', style: TextStyle(color: Colors.red)),
-            ),
-          ] else ...[
-            IconButton(
-              tooltip: 'Report',
-              color: Colors.white,
-              onPressed: () => showReportDialog(
-                context,
-                ref,
-                targetType: 'user',
-                targetId: (session['creator'] as _Json)['id'] as String,
+                  IconButton(
+                    tooltip: _camera ? 'Turn camera off' : 'Turn camera on',
+                    color: Colors.white,
+                    onPressed: () {
+                      setState(() => _camera = !_camera);
+                      _connection?.setCamera(_camera);
+                    },
+                    icon: Icon(_camera ? Icons.videocam : Icons.videocam_off),
+                  ),
+                  IconButton(
+                    tooltip: 'Flip camera',
+                    color: Colors.white,
+                    onPressed: () => _connection?.flipCamera(),
+                    icon: const Icon(Icons.cameraswitch_outlined),
+                  ),
+                  PopupMenuButton<int>(
+                    tooltip: 'Slow mode',
+                    iconColor: Colors.white,
+                    icon: const Icon(Icons.timer_outlined),
+                    onSelected: _setSlowMode,
+                    itemBuilder: (_) => [
+                      for (final s in const [0, 10, 30])
+                        CheckedPopupMenuItem(
+                          value: s,
+                          checked: _slowMode == s,
+                          child: Text(
+                            s == 0 ? 'Slow mode off' : 'Slow mode ${s}s',
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ),
-              icon: const Icon(Icons.flag_outlined),
-            ),
-            IconButton(
-              tooltip: 'Leave',
-              color: Colors.white,
-              onPressed: () => context.pop(),
-              icon: const Icon(Icons.close),
             ),
           ],
         ],
@@ -710,110 +1194,264 @@ class _LiveRoomScreenState extends ConsumerState<LiveRoomScreen> {
     );
   }
 
-  Widget _pinBanner() => Container(
-    key: const ValueKey('live-pin'),
-    margin: const EdgeInsets.symmetric(horizontal: 8),
-    padding: const EdgeInsets.all(8),
-    decoration: BoxDecoration(
-      color: Colors.white24,
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Row(
-      children: [
-        const Icon(Icons.push_pin, color: Colors.white, size: 16),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(_pinned!, style: const TextStyle(color: Colors.white)),
-        ),
-        if (_host)
-          IconButton(
-            tooltip: 'Unpin',
-            color: Colors.white,
-            iconSize: 16,
-            onPressed: () => _connection?.pin(null),
-            icon: const Icon(Icons.close),
+  Widget _pinBanner() => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+    child: _RoomGlass(
+      key: const ValueKey('live-pin'),
+      radius: controlRadius,
+      padding: EdgeInsets.fromLTRB(12, 10, _host ? 0 : 12, 10),
+      child: Row(
+        children: [
+          const Icon(Icons.push_pin, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _pinned!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.white),
+            ),
           ),
-      ],
+          if (_host)
+            IconButton(
+              tooltip: 'Unpin',
+              color: Colors.white,
+              iconSize: 16,
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _connection?.pin(null),
+              icon: const Icon(Icons.close),
+            ),
+        ],
+      ),
     ),
   );
 
-  Widget _chat() => SizedBox(
-    height: 220,
-    child: ListView.builder(
-      reverse: true,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      itemCount: _lines.length,
-      itemBuilder: (context, i) {
-        final line = _lines[_lines.length - 1 - i];
-        final mine = line.identity == _join?.identity;
-        return GestureDetector(
-          onTap: _host && line.identity != null && !mine
-              ? () => _moderate(line)
-              : null,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: '${line.name} ',
-                    style: const TextStyle(
-                      color: Colors.amberAccent,
-                      fontWeight: FontWeight.bold,
+  Widget _chat() {
+    final brand = Brand.of(context);
+    final body = Theme.of(context).textTheme.bodyMedium;
+    // Older lines fade out at the top edge instead of being cut off.
+    return SizedBox(
+      height: 220,
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (rect) => const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.transparent, Colors.black],
+          stops: [0, 0.18],
+        ).createShader(rect),
+        child: ListView.builder(
+          reverse: true,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          itemCount: _lines.length,
+          // Lines keep their element as new ones push them up, so each fades
+          // in once, on arrival.
+          findChildIndexCallback: (key) {
+            final i = _lines.indexOf((key as ObjectKey).value! as _ChatLine);
+            return i < 0 ? null : _lines.length - 1 - i;
+          },
+          itemBuilder: (context, i) {
+            final line = _lines[_lines.length - 1 - i];
+            final mine = line.identity == _join?.identity;
+            final tip = line.tipCents != null;
+            final ink = tip ? brandInk : Colors.white;
+            return Align(
+              key: ObjectKey(line),
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: GestureDetector(
+                  onTap: _host && line.identity != null && !mine
+                      ? () => _moderate(line)
+                      : null,
+                  child: _FadeIn(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: tip
+                            ? null
+                            : Colors.black.withValues(alpha: 0.36),
+                        gradient: tip ? brand.gradient : null,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(controlRadius),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '${line.name} ',
+                                style: TextStyle(
+                                  color: tip
+                                      ? brandInk
+                                      : identityColors(
+                                          line.identity ?? line.name,
+                                        ).$1,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              TextSpan(
+                                text: tip
+                                    ? 'sent a ${formatKes(line.tipCents!)} tip 🎉'
+                                    : line.text,
+                                style: TextStyle(
+                                  color: ink,
+                                  fontWeight: tip ? FontWeight.w600 : null,
+                                ),
+                              ),
+                            ],
+                          ),
+                          style: body,
+                        ),
+                      ),
                     ),
                   ),
-                  TextSpan(
-                    text: line.tipCents == null
-                        ? line.text
-                        : 'sent a ${formatKes(line.tipCents!)} tip 🎉',
-                    style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _composer() => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+    child: _RoomGlass(
+      radius: cardRadius,
+      padding: const EdgeInsets.all(6),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              key: const ValueKey('live-chat-input'),
+              controller: _input,
+              maxLength: 200,
+              style: const TextStyle(color: Colors.white),
+              cursorColor: Colors.white,
+              onSubmitted: (_) => _send(),
+              decoration: InputDecoration(
+                hintText: _slowMode > 0
+                    ? 'Slow mode: ${_slowMode}s'
+                    : 'Say something',
+                hintStyle: const TextStyle(color: Colors.white54),
+                counterText: '',
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.08),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(controlRadius),
+                  ),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(controlRadius),
+                  ),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: const BorderRadius.all(
+                    Radius.circular(controlRadius),
+                  ),
+                  borderSide: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 2),
+          IconButton(
+            key: const ValueKey('live-chat-send'),
+            tooltip: 'Send',
+            color: Colors.white,
+            onPressed: _send,
+            icon: const Icon(Icons.send),
+          ),
+          if (!_host)
+            IconButton.filled(
+              key: const ValueKey('live-tip'),
+              tooltip: 'Send a tip',
+              style: brandButtonStyle(context),
+              onPressed: _tip,
+              icon: const Icon(Icons.volunteer_activism),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Fades a chat line in once. Lines arrive often, so nothing moves.
+class _FadeIn extends StatelessWidget {
+  const _FadeIn({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(begin: 0, end: 1),
+    duration: motion(context, shortDuration),
+    curve: easeOut,
+    builder: (_, t, child) => Opacity(opacity: t, child: child),
+    child: child,
+  );
+}
+
+/// The end-of-stream numbers, one per row.
+class _Summary extends StatelessWidget {
+  const _Summary({required this.rows});
+  final List<(String, String)> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: const BorderRadius.all(Radius.circular(cardRadius)),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (i, (label, value)) in rows.indexed) ...[
+            if (i > 0) const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: text.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    value,
+                    style: text.titleMedium?.copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-        );
-      },
-    ),
-  );
-
-  Widget _composer() => Padding(
-    padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-    child: Row(
-      children: [
-        Expanded(
-          child: TextField(
-            key: const ValueKey('live-chat-input'),
-            controller: _input,
-            maxLength: 200,
-            style: const TextStyle(color: Colors.white),
-            onSubmitted: (_) => _send(),
-            decoration: InputDecoration(
-              hintText: _slowMode > 0
-                  ? 'Slow mode: ${_slowMode}s'
-                  : 'Say something',
-              hintStyle: const TextStyle(color: Colors.white54),
-              counterText: '',
-              filled: true,
-              fillColor: Colors.white12,
-            ),
-          ),
-        ),
-        IconButton(
-          key: const ValueKey('live-chat-send'),
-          tooltip: 'Send',
-          color: Colors.white,
-          onPressed: _send,
-          icon: const Icon(Icons.send),
-        ),
-        if (!_host)
-          IconButton.filled(
-            key: const ValueKey('live-tip'),
-            tooltip: 'Send a tip',
-            onPressed: _tip,
-            icon: const Icon(Icons.volunteer_activism),
-          ),
-      ],
-    ),
-  );
+          ],
+        ],
+      ),
+    );
+  }
 }

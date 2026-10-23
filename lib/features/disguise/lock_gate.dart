@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 
+import '../../app/theme.dart';
+import '../../app/ui.dart';
 import '../../core/prefs.dart';
 import 'decoy_calculator.dart';
 import 'decoy_calendar.dart';
@@ -157,22 +159,47 @@ class LockScreen extends ConsumerWidget {
     if (ref.watch(lockProvider).hasPin == null) return const Scaffold();
     final unlock = ref.read(lockProvider.notifier).unlock;
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: PinPad(
-            title: 'Enter PIN',
-            onSubmit: (pin) async {
-              final error = await checkPin(ref, pin);
-              if (error == null) unlock();
-              return error;
-            },
-            onBiometric: ref.watch(biometricProvider)
-                ? () async {
-                    if (await authenticateWithBiometrics()) unlock();
-                  }
-                : null,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlowBackground()),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.all(
+                        Radius.circular(controlRadius),
+                      ),
+                      child: Image.asset(
+                        'assets/branding/raha.png',
+                        width: 56,
+                        height: 56,
+                        excludeFromSemantics: true,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    PinPad(
+                      title: 'Enter PIN',
+                      onSubmit: (pin) async {
+                        final error = await checkPin(ref, pin);
+                        if (error == null) unlock();
+                        return error;
+                      },
+                      onBiometric: ref.watch(biometricProvider)
+                          ? () async {
+                              if (await authenticateWithBiometrics()) unlock();
+                            }
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

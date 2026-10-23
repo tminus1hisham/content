@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'theme.dart';
+
 /// Opens the "Schedule post" bottom sheet and returns the chosen local
 /// [DateTime], or null if dismissed. [now] exists for tests.
 Future<DateTime?> showSchedulePicker(
@@ -150,7 +152,10 @@ class _SchedulePickerSheetState extends State<_SchedulePickerSheet> {
             ),
           ],
           const SizedBox(height: 20),
-          Text('Time', style: text.labelLarge),
+          Text(
+            'Time',
+            style: text.labelLarge?.copyWith(color: scheme.onSurfaceVariant),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -171,13 +176,39 @@ class _SchedulePickerSheetState extends State<_SchedulePickerSheet> {
           ),
           if (selected != null) ...[
             const SizedBox(height: 20),
-            Text(
-              'Goes live ${DateFormat('EEE, d MMM').format(selected)} · '
-              '${_time!.format(context)}',
-              style: text.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHigh,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(controlRadius),
+                ),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.event_available, color: scheme.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Goes live ${DateFormat('EEE, d MMM').format(selected)} · '
+                        '${_time!.format(context)}',
+                        style: text.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -227,6 +258,7 @@ class _DayPill extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final fg = selected ? scheme.onPrimary : scheme.onSurface;
+    final muted = selected ? scheme.onPrimary : scheme.onSurfaceVariant;
     final weekday = isToday ? 'Today' : DateFormat.E().format(date);
     return Semantics(
       button: true,
@@ -235,9 +267,16 @@ class _DayPill extends StatelessWidget {
       excludeSemantics: true,
       child: Material(
         color: selected ? scheme.primary : scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(controlRadius)),
+          side: BorderSide(
+            color: selected ? scheme.primary : scheme.outlineVariant,
+          ),
+        ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          customBorder: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(controlRadius)),
+          ),
           onTap: onTap,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 56, minHeight: 48),
@@ -249,7 +288,7 @@ class _DayPill extends StatelessWidget {
                 children: [
                   Text(
                     weekday,
-                    style: theme.textTheme.labelMedium?.copyWith(color: fg),
+                    style: theme.textTheme.labelMedium?.copyWith(color: muted),
                   ),
                   Text(
                     '${date.day}',

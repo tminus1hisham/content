@@ -1,6 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/motion.dart';
+import '../../app/theme.dart';
+import '../../app/ui.dart';
 import 'lock_gate.dart';
 import 'pin_store.dart';
 
@@ -26,12 +32,20 @@ class PinPad extends StatefulWidget {
   State<PinPad> createState() => _PinPadState();
 }
 
-class _PinPadState extends State<PinPad> {
+class _PinPadState extends State<PinPad> with SingleTickerProviderStateMixin {
   String _pin = '';
   String? _error;
   bool _busy = false;
+  late final _shake = AnimationController(vsync: this);
+
+  @override
+  void dispose() {
+    _shake.dispose();
+    super.dispose();
+  }
 
   void _digit(String d) {
+    HapticFeedback.selectionClick();
     if (_pin.length < 6) setState(() => _pin += d);
   }
 
@@ -44,100 +58,178 @@ class _PinPadState extends State<PinPad> {
       _error = error;
       if (error != null) _pin = '';
     });
+    if (error != null) {
+      HapticFeedback.heavyImpact();
+      _shake.duration = motion(context, mediumDuration);
+      _shake.forward(from: 0);
+    }
   }
 
-  Widget _key(String id, Widget child, VoidCallback? onPressed) => Padding(
-    padding: const EdgeInsets.all(6),
-    child: SizedBox.square(
-      dimension: 68,
-      child: TextButton(
-        key: ValueKey('pin-$id'),
-        style: TextButton.styleFrom(shape: const CircleBorder()),
-        onPressed: _busy ? null : onPressed,
-        child: child,
+  Widget _key(String id, Widget child, VoidCallback? onPressed) {
+    final scheme = Theme.of(context).colorScheme;
+    // The empty slot beside 0 keeps the grid but draws nothing.
+    final blank = id == 'none';
+    final fill = blank ? Colors.transparent : scheme.surfaceContainerHigh;
+    return Padding(
+      padding: const EdgeInsets.all(6),
+      child: SizedBox.square(
+        dimension: 68,
+        child: Pressable(
+          scale: 0.95,
+          child: TextButton(
+            key: ValueKey('pin-$id'),
+            style: TextButton.styleFrom(
+              shape: CircleBorder(
+                side: blank
+                    ? BorderSide.none
+                    : BorderSide(color: scheme.outlineVariant),
+              ),
+              padding: EdgeInsets.zero,
+              backgroundColor: fill,
+              disabledBackgroundColor: fill,
+              foregroundColor: scheme.onSurface,
+            ),
+            onPressed: _busy ? null : onPressed,
+            child: child,
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _digitKey(String d) => _key(
     d,
-    Text(d, style: Theme.of(context).textTheme.headlineSmall),
+    Text(
+      d,
+      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+        fontWeight: FontWeight.w500,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    ),
     () => _digit(d),
+  );
+
+  Widget _dot(int i, ColorScheme scheme) => Container(
+    width: 14,
+    height: 14,
+    margin: const EdgeInsets.symmetric(horizontal: 6),
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(color: i < 4 ? scheme.outline : scheme.outlineVariant),
+    ),
+    child: AnimatedScale(
+      scale: i < _pin.length ? 1 : 0,
+      duration: motion(context, pressDuration),
+      curve: easeOut,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: scheme.primary,
+        ),
+      ),
+    ),
   );
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final onBiometric = widget.onBiometric;
+    // The decoys' neutral theme has no Brand, so no sunset shows there.
+    final branded = Theme.of(context).extension<Brand>() != null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 16),
-        Semantics(
-          label: '${_pin.length} digits entered',
-          excludeSemantics: true,
-          child: Row(
+        Text(
+          widget.title,
+          style: Theme.of(context).textTheme.titleLarge,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
+        AnimatedBuilder(
+          animation: _shake,
+          builder: (context, child) => Transform.translate(
+            // Three swings that die out.
+            offset: Offset(
+              math.sin(_shake.value * math.pi * 6) * 10 * (1 - _shake.value),
+              0,
+            ),
+            child: child,
+          ),
+          child: Semantics(
+            label: '${_pin.length} digits entered',
+            excludeSemantics: true,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [for (var i = 0; i < 6; i++) _dot(i, scheme)],
+            ),
+          ),
+        ),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 36),
+          child: Center(
+            child: Text(
+              _error ?? '',
+              style: TextStyle(color: scheme.error),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+        // The keys are fixed circles, so their labels stop growing at 140%.
+        MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.4,
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (var i = 0; i < 6; i++)
-                Container(
-                  width: 14,
-                  height: 14,
-                  margin: const EdgeInsets.symmetric(horizontal: 6),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: i < _pin.length ? scheme.primary : null,
-                    border: Border.all(
-                      color: i < 4 ? scheme.outline : scheme.outlineVariant,
-                    ),
-                  ),
+              for (final row in const [
+                ['1', '2', '3'],
+                ['4', '5', '6'],
+                ['7', '8', '9'],
+              ])
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [for (final d in row) _digitKey(d)],
                 ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  onBiometric == null
+                      ? _key('none', const SizedBox(), null)
+                      : _key(
+                          'bio',
+                          const Icon(
+                            Icons.fingerprint,
+                            size: 28,
+                            semanticLabel: 'Biometrics',
+                          ),
+                          onBiometric,
+                        ),
+                  _digitKey('0'),
+                  _key(
+                    'back',
+                    const Icon(
+                      Icons.backspace_outlined,
+                      semanticLabel: 'Delete',
+                    ),
+                    _pin.isEmpty
+                        ? null
+                        : () => setState(
+                            () => _pin = _pin.substring(0, _pin.length - 1),
+                          ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
+        const SizedBox(height: 12),
         SizedBox(
-          height: 32,
-          child: Center(
-            child: Text(_error ?? '', style: TextStyle(color: scheme.error)),
+          width: 3 * 68 + 4 * 6,
+          child: FilledButton(
+            key: const ValueKey('pin-ok'),
+            style: branded ? brandButtonStyle(context) : null,
+            onPressed: !_busy && PinStore.isValid(_pin) ? _submit : null,
+            child: const Text('OK'),
           ),
-        ),
-        for (final row in const [
-          ['1', '2', '3'],
-          ['4', '5', '6'],
-          ['7', '8', '9'],
-        ])
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [for (final d in row) _digitKey(d)],
-          ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            onBiometric == null
-                ? _key('none', const SizedBox(), null)
-                : _key(
-                    'bio',
-                    const Icon(Icons.fingerprint, semanticLabel: 'Biometrics'),
-                    onBiometric,
-                  ),
-            _digitKey('0'),
-            _key(
-              'back',
-              const Icon(Icons.backspace_outlined, semanticLabel: 'Delete'),
-              _pin.isEmpty
-                  ? null
-                  : () => setState(
-                      () => _pin = _pin.substring(0, _pin.length - 1),
-                    ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        FilledButton(
-          key: const ValueKey('pin-ok'),
-          onPressed: !_busy && PinStore.isValid(_pin) ? _submit : null,
-          child: const Text('OK'),
         ),
       ],
     );
@@ -162,7 +254,8 @@ Future<bool> showPinSheet(BuildContext context, WidgetRef ref) async {
     isScrollControlled: true,
     showDragHandle: true,
     builder: (sheetContext) => SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
+        // Scrolls only when large text makes the pad taller than the screen.
         padding: const EdgeInsets.only(bottom: 16),
         child: PinPad(
           title: 'Enter PIN',
@@ -215,6 +308,7 @@ class _PinSetupPageState extends State<_PinSetupPage> {
       appBar: AppBar(title: const Text('Set PIN')),
       body: Center(
         child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(vertical: 16),
           child: PinPad(
             // A new key resets the pad between steps.
             key: ValueKey(first == null ? 'choose$_mismatch' : 'confirm'),

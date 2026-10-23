@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/motion.dart';
 import '../../app/theme.dart';
+import '../../app/ui.dart';
 import '../../core/api_client.dart';
 import '../../core/money.dart';
 import '../auth/auth_controller.dart';
@@ -23,6 +26,32 @@ String _date(BuildContext context, String iso) => MaterialLocalizations.of(
 ).formatMediumDate(DateTime.parse(iso).toLocal());
 
 const _tabular = [FontFeature.tabularFigures()];
+
+/// List padding that centres a 600-wide column on wide screens.
+EdgeInsets _pad(BuildContext context) => EdgeInsets.symmetric(
+  horizontal: math.max(16, (MediaQuery.sizeOf(context).width - 600) / 2),
+  vertical: 16,
+);
+
+/// Creators have no name on orders; the description carries the handle.
+String _handleIn(String description) =>
+    RegExp(r'@([\w.]+)').firstMatch(description)?.group(1) ?? description;
+
+/// Hairline-bordered card from the theme, tappable with press feedback.
+Widget _card({required Widget child, VoidCallback? onTap}) {
+  final card = Card(
+    margin: EdgeInsets.zero,
+    clipBehavior: Clip.antiAlias,
+    child: onTap == null ? child : InkWell(onTap: onTap, child: child),
+  );
+  return onTap == null ? card : Pressable(child: card);
+}
+
+/// Heading above a group of rows.
+Widget _section(BuildContext context, String title) => Padding(
+  padding: const EdgeInsets.fromLTRB(4, 24, 4, 10),
+  child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+);
 
 /// Rounded-square tonal icon used as the leading element of money rows.
 class _TonalIcon extends StatelessWidget {
@@ -64,6 +93,21 @@ class CheckoutScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
 }
+
+/// Statuses with their own view in [_CheckoutScreenState._result]; anything
+/// else shows the waiting view.
+const _outcomes = {
+  'succeeded',
+  'failed',
+  'cancelled',
+  'expired',
+  'reversed',
+  'under_review',
+  'still_waiting',
+};
+
+/// Outcomes where the payment did not go through (shown as a failed step).
+const _unsuccessful = {'failed', 'cancelled', 'expired', 'reversed'};
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   static const pollEvery = Duration(seconds: 2);
@@ -166,7 +210,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       });
       if (terminalPaymentStates.contains(status)) {
         _timer?.cancel();
-        if (status == 'succeeded') _refreshAccess();
+        // A reversal can withdraw access granted earlier, so refresh then too.
+        if (status == 'succeeded' || status == 'reversed') _refreshAccess();
       }
     } catch (_) {
       // Offline for a moment: keep polling; the server state is unchanged.
@@ -193,33 +238,63 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Checkout')),
       body: order == null
-          ? Center(
-              child: _error == null
-                  ? const CircularProgressIndicator()
-                  : Text(_error!),
-            )
+          ? _error == null
+                ? const SkeletonList(count: 2, itemHeight: 120)
+                : StateView(icon: Icons.error_outline, title: _error!)
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: _pad(context),
               children: [
                 _OrderSummary(order: order),
                 const SizedBox(height: 16),
-                if (_paymentId == null) ..._payForm() else _result(order),
+                // Cross-fades form -> waiting -> outcome; no movement on a
+                // money screen.
+                AnimatedSwitcher(
+                  duration: motion(context, shortDuration),
+                  switchInCurve: easeOut,
+                  switchOutCurve: easeOut,
+                  // Top-aligned, so the outgoing view never shifts.
+                  layoutBuilder: (current, previous) => Stack(
+                    alignment: Alignment.topCenter,
+                    children: [...previous, ?current],
+                  ),
+                  child: KeyedSubtree(
+                    key: ValueKey(
+                      _paymentId == null
+                          ? 'form'
+                          : _outcomes.contains(_status)
+                          ? _status
+                          : 'waiting',
+                    ),
+                    child: _paymentId == null
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: _payForm(),
+                          )
+                        : _result(order),
+                  ),
+                ),
               ],
             ),
     );
   }
 
   List<Widget> _payForm() => [
-    Text('Pay with', style: Theme.of(context).textTheme.titleMedium),
-    const Card(
+    Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+      child: Text('Pay with', style: Theme.of(context).textTheme.titleMedium),
+    ),
+    _card(
       child: ListTile(
-        leading: _TonalIcon(Icons.phone_android),
-        title: Text('M-Pesa'),
-        subtitle: Text('You will get a prompt on your phone'),
-        trailing: Icon(Icons.check_circle),
+        leading: const _TonalIcon(Icons.phone_android),
+        title: const Text('M-Pesa'),
+        subtitle: const Text('You will get a prompt on your phone'),
+        trailing: Icon(
+          Icons.check_circle,
+          color: Theme.of(context).colorScheme.primary,
+        ),
       ),
     ),
-    const SizedBox(height: 8),
+    const SizedBox(height: 12),
     TextField(
       key: const ValueKey('checkout-phone'),
       controller: _phone,
@@ -231,31 +306,62 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
     ),
     const SizedBox(height: 16),
-    FilledButton(
-      key: const ValueKey('checkout-pay'),
-      onPressed: _busy ? null : _pay,
-      child: Text('Pay ${formatKes(_order!['totalCents'] as int)}'),
+    Pressable(
+      child: FilledButton(
+        key: const ValueKey('checkout-pay'),
+        style: brandButtonStyle(context),
+        onPressed: _busy ? null : _pay,
+        child: Text('Pay ${formatKes(_order!['totalCents'] as int)}'),
+      ),
     ),
   ];
 
   Widget _result(Json order) {
+    final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final failed = _unsuccessful.contains(_status);
+    final (badge, onBadge) = _status == 'succeeded'
+        ? (scheme.primary.withValues(alpha: 0.14), scheme.primary)
+        : failed
+        ? (scheme.error.withValues(alpha: 0.14), scheme.error)
+        : (scheme.surfaceContainerHighest, scheme.primary);
     Widget state(
       IconData icon,
       String title,
       String body,
       List<Widget> actions,
-    ) => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Icon(icon, size: 56),
-        const SizedBox(height: 8),
-        Text(title, style: text.titleLarge, textAlign: TextAlign.center),
-        const SizedBox(height: 8),
-        Text(body, textAlign: TextAlign.center),
-        const SizedBox(height: 16),
-        ...actions,
-      ],
+    ) => _card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _PaymentSteps(status: _status),
+            const SizedBox(height: 24),
+            Center(
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(color: badge, shape: BoxShape.circle),
+                child: Icon(icon, size: 28, color: onBadge),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(title, style: text.titleLarge, textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 20),
+            for (final (i, action) in actions.indexed) ...[
+              if (i > 0) const SizedBox(height: 8),
+              action,
+            ],
+          ],
+        ),
+      ),
     );
     final done = FilledButton(
       onPressed: () => context.pop(_status == 'succeeded'),
@@ -299,6 +405,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         'The M-Pesa prompt timed out. You were not charged.',
         [retry],
       ),
+      'reversed' => state(
+        Icons.undo_rounded,
+        'Payment reversed',
+        'M-Pesa reversed this payment, so nothing was unlocked. Any money '
+            'taken goes back to your M-Pesa account.',
+        [retry],
+      ),
       'under_review' => state(
         Icons.hourglass_empty,
         'Payment under review',
@@ -324,7 +437,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         'Enter your M-Pesa PIN on the prompt to pay '
             '${formatKes(order['totalCents'] as int)}. Waiting for M-Pesa to '
             'confirm…',
-        [const LinearProgressIndicator()],
+        [
+          const ClipRRect(
+            borderRadius: BorderRadius.all(Radius.circular(2)),
+            child: LinearProgressIndicator(),
+          ),
+        ],
       ),
     };
   }
@@ -336,49 +454,176 @@ class _OrderSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    Widget row(String label, String value, {bool bold = false}) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+    final description = order['description'] as String;
+    final muted = text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
+    Widget row(String label, String value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Expanded(
-            child: Text(label, style: bold ? text.titleLarge : text.bodyLarge),
-          ),
-          Text(
-            value,
-            style: bold
-                ? text.titleLarge?.copyWith(fontFeatures: _tabular)
-                : text.bodyLarge?.copyWith(fontFeatures: _tabular),
-          ),
+          Expanded(child: Text(label, style: muted)),
+          Text(value, style: muted?.copyWith(fontFeatures: _tabular)),
         ],
       ),
     );
-    return Card(
+    return _card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              order['description'] as String,
-              style: Theme.of(context).textTheme.titleMedium,
+            Row(
+              children: [
+                CreatorAvatar(
+                  id: order['creatorId'] as String? ?? description,
+                  name: _handleIn(description),
+                ),
+                const SizedBox(width: 14),
+                Expanded(child: Text(description, style: text.titleMedium)),
+              ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             row('Price', formatKes(order['amountCents'] as int)),
             row('Fees', formatKes(order['feesCents'] as int)),
-            const Divider(height: 24),
-            row('Total', formatKes(order['totalCents'] as int), bold: true),
-            const SizedBox(height: 8),
+            const Divider(height: 20),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(child: Text('Total', style: text.titleMedium)),
+                Text(
+                  formatKes(order['totalCents'] as int),
+                  style: text.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.5,
+                    fontFeatures: _tabular,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
             Text(
               order['recurring'] == true
                   ? 'Renews every month until you cancel. Cancel any time in '
                         'My library.'
                   : 'One-time payment. No renewal.',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Where the M-Pesa payment is: prompt sent, waiting, confirmed. Each step
+/// has an icon and a label, so the state never relies on colour alone.
+class _PaymentSteps extends StatelessWidget {
+  const _PaymentSteps({required this.status});
+  final String? status;
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = _unsuccessful.contains(status);
+    final steps = <(String, _Step)>[
+      ('Prompt sent', _Step.done),
+      if (failed)
+        ('Not completed', _Step.failed)
+      else
+        ('Waiting', status == 'succeeded' ? _Step.done : _Step.active),
+      if (status == 'under_review')
+        ('In review', _Step.active)
+      else
+        ('Confirmed', status == 'succeeded' ? _Step.done : _Step.todo),
+    ];
+    final scheme = Theme.of(context).colorScheme;
+    bool reached(_Step s) => s == _Step.done || s == _Step.active;
+    Widget line(bool lit) => Expanded(
+      child: Container(
+        height: 2,
+        color: lit ? scheme.primary : scheme.outlineVariant,
+      ),
+    );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (i, (label, step)) in steps.indexed)
+          Expanded(
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    if (i == 0) const Spacer() else line(reached(step)),
+                    _StepDot(step),
+                    if (i == steps.length - 1)
+                      const Spacer()
+                    else
+                      line(reached(steps[i + 1].$2)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: step == _Step.todo
+                        ? scheme.onSurfaceVariant
+                        : scheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+enum _Step { done, active, failed, todo }
+
+class _StepDot extends StatelessWidget {
+  const _StepDot(this.step);
+  final _Step step;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final (fill, border, icon, color) = switch (step) {
+      _Step.done => (
+        scheme.primary,
+        scheme.primary,
+        Icons.check,
+        scheme.onPrimary,
+      ),
+      _Step.failed => (
+        scheme.errorContainer,
+        scheme.error,
+        Icons.close,
+        scheme.onErrorContainer,
+      ),
+      _Step.active => (
+        scheme.surface,
+        scheme.primary,
+        Icons.more_horiz,
+        scheme.primary,
+      ),
+      _Step.todo => (
+        scheme.surface,
+        scheme.outlineVariant,
+        null,
+        scheme.onSurfaceVariant,
+      ),
+    };
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: fill,
+        shape: BoxShape.circle,
+        border: Border.all(color: border, width: 2),
+      ),
+      child: icon == null ? null : Icon(icon, size: 14, color: color),
     );
   }
 }
@@ -475,73 +720,139 @@ class LibraryScreen extends ConsumerWidget {
               ref.watch(purchasesProvider),
               () => ref.invalidate(purchasesProvider),
               (orders) => orders.isEmpty
-                  ? const Center(child: Text('Nothing bought yet'))
-                  : ListView(
-                      children: [
-                        for (final o in orders)
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
-                            leading: _TonalIcon(
-                              o['type'] == 'post'
-                                  ? Icons.lock_open
-                                  : Icons.autorenew,
-                            ),
-                            title: Text(o['description'] as String),
-                            subtitle: Text(
-                              '${formatKes(o['totalCents'] as int)} · '
-                              '${orderStatusLabels[o['status']] ?? o['status']} · '
-                              '${_date(context, o['createdAt'] as String)}',
-                            ),
-                            onTap: o['type'] == 'post'
-                                ? () => context.push('/p/${o['itemId']}')
-                                : null,
-                            trailing: o['status'] == 'paid'
-                                ? PopupMenuButton<String>(
-                                    onSelected: (_) => _refund(context, ref, o),
-                                    itemBuilder: (_) => const [
-                                      PopupMenuItem(
-                                        value: 'refund',
-                                        child: Text('Request refund'),
-                                      ),
-                                    ],
-                                  )
-                                : null,
-                          ),
-                      ],
+                  ? const StateView(
+                      icon: Icons.shopping_bag_outlined,
+                      title: 'Nothing bought yet',
+                    )
+                  : ListView.separated(
+                      padding: _pad(context),
+                      itemCount: orders.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (context, i) => Entrance(
+                        index: i,
+                        child: _purchase(context, ref, orders[i]),
+                      ),
                     ),
             ),
             asyncBody(
               ref.watch(subscriptionsProvider),
               () => ref.invalidate(subscriptionsProvider),
               (subs) => subs.isEmpty
-                  ? const Center(child: Text('No subscriptions'))
-                  : ListView(
-                      children: [
-                        for (final s in subs)
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
-                            leading: const _TonalIcon(Icons.star_outline),
-                            title: Text('@${(s['creator'] as Json)['handle']}'),
-                            subtitle: Text(
-                              '${formatKes(s['priceCents'] as int)}/month · '
-                              '${s['status'] == 'active' ? 'Renews ${_date(context, s['renewsAt'] as String)}' : 'Ends ${_date(context, s['endsAt'] as String)}'}',
-                            ),
-                            trailing: s['status'] == 'active'
-                                ? TextButton(
-                                    onPressed: () => _cancel(context, ref, s),
-                                    child: const Text('Cancel'),
-                                  )
-                                : const Text('Cancelled'),
-                          ),
-                      ],
+                  ? const StateView(
+                      icon: Icons.star_outline,
+                      title: 'No subscriptions',
+                    )
+                  : ListView.separated(
+                      padding: _pad(context),
+                      itemCount: subs.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (context, i) => Entrance(
+                        index: i,
+                        child: _subscription(context, ref, subs[i]),
+                      ),
                     ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _purchase(BuildContext context, WidgetRef ref, Json o) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final description = o['description'] as String;
+    final paid = o['status'] == 'paid';
+    return _card(
+      onTap: o['type'] == 'post'
+          ? () => context.push('/p/${o['itemId']}')
+          : null,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 14, paid ? 4 : 16, 14),
+        child: Row(
+          children: [
+            CreatorAvatar(
+              id: o['creatorId'] as String? ?? description,
+              name: _handleIn(description),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(description, style: text.titleSmall),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${formatKes(o['totalCents'] as int)} · '
+                    '${orderStatusLabels[o['status']] ?? o['status']} · '
+                    '${_date(context, o['createdAt'] as String)}',
+                    style: text.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontFeatures: _tabular,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (paid)
+              PopupMenuButton<String>(
+                onSelected: (_) => _refund(context, ref, o),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'refund', child: Text('Request refund')),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _subscription(BuildContext context, WidgetRef ref, Json s) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final creator = s['creator'] as Json;
+    final active = s['status'] == 'active';
+    return _card(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 14, active ? 8 : 16, 14),
+        child: Row(
+          children: [
+            CreatorAvatar(
+              id: creator['id'] as String? ?? '${creator['handle']}',
+              name: creator['displayName'] as String? ?? '',
+              ring: active,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('@${creator['handle']}', style: text.titleSmall),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${formatKes(s['priceCents'] as int)}/month · '
+                    '${active ? 'Renews ${_date(context, s['renewsAt'] as String)}' : 'Ends ${_date(context, s['endsAt'] as String)}'}',
+                    style: text.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontFeatures: _tabular,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (active)
+              TextButton(
+                onPressed: () => _cancel(context, ref, s),
+                child: const Text('Cancel'),
+              )
+            else
+              Text(
+                'Cancelled',
+                style: text.labelMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
           ],
         ),
       ),
@@ -555,7 +866,9 @@ class EarningsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final muted = text.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
     return Scaffold(
       appBar: AppBar(title: const Text('Earnings')),
       body: asyncBody(
@@ -566,12 +879,13 @@ class EarningsScreen extends ConsumerWidget {
         (e) {
           Widget bucket(String label, String key) => Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   formatKes(e[key] as int),
                   style: text.titleMedium?.copyWith(fontFeatures: _tabular),
                 ),
-                Text(label, style: text.bodySmall),
+                Text(label, style: muted),
               ],
             ),
           );
@@ -585,61 +899,82 @@ class EarningsScreen extends ConsumerWidget {
               await ref.read(earningsProvider.future);
             },
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: _pad(context),
               children: [
-                Card(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        Text('Available', style: text.labelLarge),
-                        const SizedBox(height: 4),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            formatKes(e['availableCents'] as int),
-                            key: const ValueKey('earnings-available'),
-                            style: text.displaySmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontFeatures: _tabular,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
+                _card(
+                  child: Stack(
+                    children: [
+                      const Positioned.fill(child: GlowBackground()),
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            bucket('Pending', 'pendingCents'),
-                            bucket('Reserved', 'reservedCents'),
-                            bucket('Paid out', 'paidOutCents'),
+                            Text(
+                              'Available',
+                              style: text.labelLarge?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                formatKes(e['availableCents'] as int),
+                                key: const ValueKey('earnings-available'),
+                                style: text.displayMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -1.5,
+                                  fontFeatures: _tabular,
+                                ),
+                              ),
+                            ),
+                            const Divider(height: 32),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                bucket('Pending', 'pendingCents'),
+                                bucket('Reserved', 'reservedCents'),
+                                bucket('Paid out', 'paidOutCents'),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Pressable(
+                              child: FilledButton(
+                                style: brandButtonStyle(context),
+                                onPressed: canPay
+                                    ? () => context.push('/earnings/payout')
+                                    : null,
+                                child: const Text('Request payout'),
+                              ),
+                            ),
+                            if (!canPay) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'You can request a payout from '
+                                '${formatKes(e['payoutMinimumCents'] as int)}.',
+                                textAlign: TextAlign.center,
+                                style: muted,
+                              ),
+                            ],
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: canPay
-                              ? () => context.push('/earnings/payout')
-                              : null,
-                          child: const Text('Request payout'),
-                        ),
-                        if (!canPay)
-                          Text(
-                            'You can request a payout from '
-                            '${formatKes(e['payoutMinimumCents'] as int)}.',
-                            style: text.bodySmall,
-                          ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Platform commission: ${e['commissionPercent']}% under your '
-                  'agreement. New earnings stay pending until settlement.',
-                  style: text.bodySmall,
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    'Platform commission: ${e['commissionPercent']}% under your '
+                    'agreement. New earnings stay pending until settlement.',
+                    style: muted,
+                  ),
                 ),
-                const SizedBox(height: 16),
                 _PayoutHistory(),
-                Text('Transactions', style: text.titleMedium),
+                _section(context, 'Transactions'),
                 _Transactions(),
               ],
             ),
@@ -650,33 +985,78 @@ class EarningsScreen extends ConsumerWidget {
   }
 }
 
+/// Rows in one hairline card, split by inset dividers.
+Widget _group(List<Widget> rows) => _card(
+  child: Column(
+    children: [
+      for (final (i, row) in rows.indexed) ...[
+        if (i > 0) const Divider(height: 1, indent: 72),
+        row,
+      ],
+    ],
+  ),
+);
+
 class _PayoutHistory extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final payouts = ref.watch(payoutRequestsProvider).valueOrNull ?? const [];
     if (payouts.isEmpty) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Payout requests', style: Theme.of(context).textTheme.titleMedium),
-        for (final p in payouts)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const _TonalIcon(Icons.outbox),
-            title: Text(
-              formatKes(p['amountCents'] as int),
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontFeatures: _tabular),
+        _section(context, 'Payout requests'),
+        _group([
+          for (final p in payouts)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+              child: Row(
+                children: [
+                  const _TonalIcon(Icons.outbox),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          formatKes(p['amountCents'] as int),
+                          style: text.titleMedium?.copyWith(
+                            fontFeatures: _tabular,
+                          ),
+                        ),
+                        Text(
+                          '${p['destination']} · '
+                          '${_date(context, p['createdAt'] as String)}',
+                          style: text.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: const BorderRadius.all(
+                        Radius.circular(999),
+                      ),
+                    ),
+                    child: Text(
+                      _payoutLabels[p['status']] ?? '${p['status']}',
+                      style: text.labelMedium,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            subtitle: Text(
-              '${p['destination']} · ${_date(context, p['createdAt'] as String)}',
-            ),
-            trailing: Chip(
-              label: Text(_payoutLabels[p['status']] ?? '${p['status']}'),
-            ),
-          ),
-        const SizedBox(height: 16),
+        ]),
       ],
     );
   }
@@ -696,62 +1076,84 @@ class _Transactions extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final txs = ref.watch(transactionsProvider).valueOrNull ?? const [];
-    return Column(
-      children: [
-        for (final t in txs)
-          ExpansionTile(
-            tilePadding: EdgeInsets.zero,
-            shape: const Border(),
-            collapsedShape: const Border(),
-            leading: _TonalIcon(
-              (t['netCents'] as int) < 0
-                  ? Icons.arrow_upward
-                  : Icons.arrow_downward,
+    if (txs.isEmpty) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final muted = text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
+    return _group([
+      for (final t in txs)
+        ExpansionTile(
+          tilePadding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
+          shape: const Border(),
+          collapsedShape: const Border(),
+          // Direction is carried by the arrow and the sign, not colour alone.
+          leading: _TonalIcon(
+            (t['netCents'] as int) < 0
+                ? Icons.arrow_upward
+                : Icons.arrow_downward,
+          ),
+          title: Text(t['description'] as String, style: text.titleSmall),
+          subtitle: Text(
+            _date(context, t['createdAt'] as String),
+            style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+          trailing: Text(
+            ((t['netCents'] as int) < 0 ? '' : '+') +
+                formatKes(t['netCents'] as int),
+            style: text.titleSmall?.copyWith(
+              fontFeatures: _tabular,
+              color: (t['netCents'] as int) < 0
+                  ? scheme.onSurface
+                  : scheme.primary,
             ),
-            title: Text(t['description'] as String),
-            subtitle: Text(_date(context, t['createdAt'] as String)),
-            trailing: Text(
-              ((t['netCents'] as int) < 0 ? '' : '+') +
-                  formatKes(t['netCents'] as int),
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontFeatures: _tabular,
-                color: (t['netCents'] as int) < 0
-                    ? Theme.of(context).colorScheme.onSurface
-                    : Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            childrenPadding: const EdgeInsets.only(bottom: 12),
-            children: [
-              for (final (label, key) in [
-                ('Gross', 'grossCents'),
-                ('Commission', 'commissionCents'),
-                ('Processing fees', 'feesCents'),
-                ('Net', 'netCents'),
-              ])
-                Row(
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(72, 0, 16, 14),
+          children: [
+            for (final (label, key) in [
+              ('Gross', 'grossCents'),
+              ('Commission', 'commissionCents'),
+              ('Processing fees', 'feesCents'),
+              ('Net', 'netCents'),
+            ])
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
                   children: [
-                    Expanded(child: Text(label)),
+                    Expanded(child: Text(label, style: muted)),
                     Text(
                       formatKes(t[key] as int),
-                      style: const TextStyle(fontFeatures: _tabular),
+                      style: muted?.copyWith(fontFeatures: _tabular),
                     ),
                   ],
                 ),
-              Row(
-                children: [
-                  Expanded(child: Text('Status · ${t['status']}')),
-                  if (t['contractRef'] != null)
-                    Text('Agreement ${t['contractRef']}'),
-                ],
               ),
-            ],
-          ),
-      ],
-    );
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Status · ${t['status']}',
+                    style: text.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                if (t['contractRef'] != null)
+                  Text(
+                    'Agreement ${t['contractRef']}',
+                    style: text.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+    ]);
   }
 }
 
-/// IT.md C11.
+// IT.md C11.
 class PayoutRequestScreen extends ConsumerStatefulWidget {
   const PayoutRequestScreen({super.key});
 
@@ -842,22 +1244,28 @@ class _PayoutRequestScreenState extends ConsumerState<PayoutRequestScreen> {
     final earnings = ref.watch(earningsProvider).valueOrNull;
     final methods = ref.watch(payoutMethodsProvider).valueOrNull;
     final method = methods?.where((m) => m['verified'] == true).firstOrNull;
+    final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final muted = text.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
     return Scaffold(
       appBar: AppBar(title: const Text('Request payout')),
       body: earnings == null || methods == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const SkeletonList(count: 3)
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: _pad(context),
               children: [
-                Card(
-                  color: Theme.of(context).colorScheme.primaryContainer,
+                _card(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Available', style: text.labelLarge),
+                        Text(
+                          'Available',
+                          style: text.labelLarge?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         FittedBox(
                           fit: BoxFit.scaleDown,
@@ -865,6 +1273,7 @@ class _PayoutRequestScreenState extends ConsumerState<PayoutRequestScreen> {
                             formatKes(earnings['availableCents'] as int),
                             style: text.displaySmall?.copyWith(
                               fontWeight: FontWeight.w700,
+                              letterSpacing: -1,
                               fontFeatures: _tabular,
                             ),
                           ),
@@ -873,7 +1282,7 @@ class _PayoutRequestScreenState extends ConsumerState<PayoutRequestScreen> {
                         Text(
                           'Minimum ${formatKes(earnings['payoutMinimumCents'] as int)}'
                           ' · maximum ${formatKes(earnings['payoutMaximumCents'] as int)}',
-                          style: text.bodySmall,
+                          style: muted?.copyWith(fontFeatures: _tabular),
                         ),
                       ],
                     ),
@@ -881,43 +1290,63 @@ class _PayoutRequestScreenState extends ConsumerState<PayoutRequestScreen> {
                 ),
                 const SizedBox(height: 16),
                 if (method == null)
-                  ListTile(
-                    leading: const Icon(Icons.warning_amber),
-                    title: const Text('Add and verify an M-Pesa number first'),
+                  _card(
                     onTap: () => context.push('/onboarding/payout'),
-                  )
-                else ...[
-                  Card(
                     child: ListTile(
-                      leading: const _TonalIcon(Icons.phone_android),
-                      title: Text('M-Pesa ${method['phoneMasked']}'),
-                      subtitle: Text('${method['accountName']}'),
+                      leading: Icon(Icons.warning_amber, color: scheme.error),
+                      title: const Text(
+                        'Add and verify an M-Pesa number first',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                    ),
+                  )
+                else
+                  _card(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const _TonalIcon(Icons.phone_android),
+                            title: Text('M-Pesa ${method['phoneMasked']}'),
+                            subtitle: Text('${method['accountName']}'),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            key: const ValueKey('payout-amount'),
+                            controller: _amount,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            decoration: const InputDecoration(
+                              labelText: 'Amount',
+                              prefixText: 'KSh ',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No payout fee. Payouts are reviewed and usually reach '
+                            'M-Pesa within 1–2 working days.',
+                            style: muted,
+                          ),
+                          const SizedBox(height: 16),
+                          Pressable(
+                            child: FilledButton(
+                              key: const ValueKey('payout-submit'),
+                              style: brandButtonStyle(context),
+                              onPressed: _busy
+                                  ? null
+                                  : () => _submit(earnings, method),
+                              child: const Text('Request payout'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    key: const ValueKey('payout-amount'),
-                    controller: _amount,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Amount',
-                      prefixText: 'KSh ',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'No payout fee. Payouts are reviewed and usually reach '
-                    'M-Pesa within 1–2 working days.',
-                    style: text.bodySmall,
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    key: const ValueKey('payout-submit'),
-                    onPressed: _busy ? null : () => _submit(earnings, method),
-                    child: const Text('Request payout'),
-                  ),
-                ],
               ],
             ),
     );
