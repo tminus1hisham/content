@@ -697,9 +697,10 @@ class _Bubble extends StatelessWidget {
     );
     final align = mine ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final details = [
+      // The API doesn't tell the sender whether a fan has bought it yet.
       if (mine && attachment?['priceCents'] != null)
         Text(
-          'Sold for ${formatKes(attachment!['priceCents'] as int)}',
+          'Paid · ${formatKes(attachment!['priceCents'] as int)}',
           style: textTheme.labelMedium?.copyWith(
             color: meta,
             fontFeatures: const [FontFeature.tabularFigures()],

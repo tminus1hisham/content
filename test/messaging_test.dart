@@ -1,3 +1,4 @@
+import 'package:content/app/router.dart' show roleKey;
 import 'package:content/core/api_client.dart';
 import 'package:content/core/fake_backend.dart';
 import 'package:content/core/prefs.dart';
@@ -159,6 +160,27 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('chat-input')), 'Hello!');
     await _tap(tester, find.byKey(const ValueKey('chat-send')));
     expect(find.text('Hello!'), findsOneWidget);
+  });
+
+  testWidgets('a paid attachment nobody bought is not labelled sold', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      signedInAs: 'creator@demo.ke',
+      prefs: {roleKey: 'creator'},
+    );
+    await _tap(
+      tester,
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Messages'),
+      ),
+    );
+    await _tap(tester, find.text('Fan U1'));
+    expect(find.text('A little something just for you'), findsOneWidget);
+    expect(find.textContaining('Sold for'), findsNothing);
+    expect(find.text('Paid · KSh 100'), findsOneWidget);
   });
 
   testWidgets('message a creator from their page, then report them', (
