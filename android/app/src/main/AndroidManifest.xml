@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application
-        android:label="Content"
+        android:label="Raha"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -42,7 +42,7 @@
         <activity-alias
             android:name=".LauncherDefault"
             android:targetActivity=".MainActivity"
-            android:label="Content"
+            android:label="Raha"
             android:icon="@mipmap/ic_launcher"
             android:enabled="true"
             android:exported="true">

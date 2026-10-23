@@ -1,4 +1,4 @@
-# Content
+# Raha
 
 A Kenya-first, adults-only creator platform. It ships as a Flutter app for Android, iOS and web, plus a staff admin web app. The product spec is [IT.md](IT.md).
 

@@ -30,7 +30,7 @@ class App extends ConsumerWidget {
     final disguise = ref.watch(disguiseProvider);
     return MaterialApp.router(
       // Shown in the recent-apps switcher, so it follows the disguise.
-      title: disguise == Disguise.none ? 'Content' : disguise.label,
+      title: disguise == Disguise.none ? 'Raha' : disguise.label,
       theme: buildTheme(accent, Brightness.light),
       darkTheme: buildTheme(accent, Brightness.dark),
       themeMode: settings.themeMode,

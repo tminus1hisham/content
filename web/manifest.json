@@ -1,11 +1,11 @@
 {
-    "name": "content",
-    "short_name": "content",
+    "name": "Raha",
+    "short_name": "Raha",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFCF5",
+    "theme_color": "#FFFCF5",
+    "description": "Raha — support creators you love.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

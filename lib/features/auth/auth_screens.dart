@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/birth_date_picker.dart';
 import '../../app/router.dart';
 import '../../core/api_client.dart';
+import '../disguise/disguise_controller.dart';
 import 'auth_controller.dart';
 import 'fake_auth.dart';
 
@@ -116,12 +117,139 @@ class _AgeGateScreenState extends ConsumerState<AgeGateScreen> {
   }
 }
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends ConsumerWidget {
   const SplashScreen({super.key});
 
   @override
-  Widget build(BuildContext context) =>
-      const Scaffold(body: Center(child: CircularProgressIndicator()));
+  Widget build(BuildContext context, WidgetRef ref) {
+    final disguise = ref.watch(disguiseProvider);
+    // Startup must preserve the identity chosen in the disguise settings.
+    if (disguise != Disguise.none) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(disguise.icon, size: 64),
+              const SizedBox(height: 20),
+              Text(
+                disguise.label,
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    const cream = Color(0xFFFFFCF5);
+    const ink = Color(0xFF392B32);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: cream,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: cream,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(1.1, -0.8),
+                  radius: 1.15,
+                  colors: [Color(0x26FF9A43), Color(0x00FF9A43)],
+                ),
+              ),
+            ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(-1.1, 0.9),
+                  radius: 1.1,
+                  colors: [Color(0x24FF65A1), Color(0x00FF65A1)],
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(32),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 650),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, child) => Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, 12 * (1 - value)),
+                        child: child,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(44),
+                          child: Image.asset(
+                            'assets/branding/raha.png',
+                            width: 176,
+                            height: 176,
+                            excludeFromSemantics: true,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Raha',
+                          style: TextStyle(
+                            fontFamily: 'Manrope',
+                            fontSize: 56,
+                            height: 1.15,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -2.5,
+                            color: ink,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Closer to what you love.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            height: 1.5,
+                            color: Color(0xFF796972),
+                          ),
+                        ),
+                        const SizedBox(height: 44),
+                        SizedBox(
+                          width: 64,
+                          child: LinearProgressIndicator(
+                            value: reduceMotion ? 0.6 : null,
+                            minHeight: 3,
+                            borderRadius: BorderRadius.circular(4),
+                            color: const Color(0xFFEC6A72),
+                            backgroundColor: const Color(0xFFF2E3DF),
+                            semanticsLabel: 'Loading Raha',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// IT.md A1.
@@ -131,17 +259,12 @@ class WelcomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: _EntryBody(
         children: [
-          Icon(Icons.auto_awesome, size: 64, color: scheme.primary),
+          Image.asset('assets/branding/raha.png', width: 80, height: 80),
           const SizedBox(height: 16),
-          Text(
-            'Content',
-            style: text.displaySmall,
-            textAlign: TextAlign.center,
-          ),
+          Text('Raha', style: text.displaySmall, textAlign: TextAlign.center),
           const SizedBox(height: 8),
           Text(
             'Support creators you love. Pay only for what you want, in KES.',

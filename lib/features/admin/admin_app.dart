@@ -193,7 +193,7 @@ class AdminApp extends ConsumerWidget {
     return Listener(
       onPointerDown: (_) => ref.read(adminAuthProvider.notifier).touch(),
       child: MaterialApp.router(
-        title: 'Content Admin',
+        title: 'Raha Admin',
         theme: buildTheme(accent, Brightness.light),
         darkTheme: buildTheme(accent, Brightness.dark),
         themeMode: theme.themeMode,

@@ -124,48 +124,48 @@ class _NetworkVideoState extends State<_NetworkVideo> {
   }
 }
 
-/// What a fan sees instead of restricted media (FR-DIS-003): no image, no
-/// blur of the real thing, just what unlocking costs.
+/// Number of generic teaser covers in assets/covers/ (1.jpg … n.jpg).
+const lockedCoverCount = 12;
+
+/// What a fan sees instead of restricted media (FR-DIS-003): a generic
+/// teaser cover, never the real image or a blur of it, plus what unlocking
+/// costs.
 class LockedMedia extends StatelessWidget {
   const LockedMedia({super.key, required this.post});
   final Post post;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final label = switch (post.access) {
       'paid' => 'Unlock for ${formatKes(post.priceCents ?? 0)}',
       'subscribers' => 'Subscribers only',
       'followers' => 'Follow to see this',
       _ => 'Locked',
     };
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [scheme.primaryContainer, scheme.tertiaryContainer],
-        ),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.lock_outline,
-              size: 40,
-              color: scheme.onPrimaryContainer,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: scheme.onPrimaryContainer,
+    // Same post, same cover, so the feed doesn't reshuffle on rebuild.
+    final cover =
+        post.id.codeUnits.fold(0, (a, b) => a + b) % lockedCoverCount + 1;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset('assets/covers/$cover.jpg', fit: BoxFit.cover),
+        const ColoredBox(color: Colors.black45),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline, size: 40, color: Colors.white),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(color: Colors.white),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }

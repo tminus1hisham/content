@@ -1,5 +1,5 @@
 name: content
-description: "A new Flutter project."
+description: "Raha — support creators you love."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -71,7 +71,9 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/branding/raha.png
     - assets/demo/
+    - assets/covers/
     - assets/fonts/OFL.txt
 
   fonts:

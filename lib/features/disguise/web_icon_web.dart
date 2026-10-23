@@ -8,7 +8,7 @@ const _titles = {
 };
 
 void setWebIcon(String name) {
-  web.document.title = _titles[name] ?? 'Content';
+  web.document.title = _titles[name] ?? 'Raha';
   web.document
       .querySelector('link[rel="icon"]')
       ?.setAttribute(

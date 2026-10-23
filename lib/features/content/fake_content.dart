@@ -112,14 +112,18 @@ class FakeContentDb {
         'discoverable': true,
       };
     }
+    // Oldest first: the posts tests look up must stay each creator's newest.
     final seeds = [
+      ('c12', 'Date night look', 'subscribers', null, 10),
+      ('c10', 'Diani weekend', 'paid', 30000, 11),
+      ('c12', 'Sunday brunch outfit', 'free', null, 12),
       ('u2', 'Behind the scenes at rehearsal', 'free', null, 1),
       ('u2', 'Full routine, uncut', 'paid', 15000, 2),
       ('u2', 'Members-only Q&A', 'subscribers', null, 3),
       ('c10', 'Morning stretch routine', 'free', null, 4),
-      ('c10', '30-day programme', 'paid', 50000, 5),
-      ('c11', 'New single preview', 'free', null, 6),
-      ('c12', 'Pilau, my way', 'followers', null, 1),
+      ('c10', '30-day programme', 'paid', 50000, 7),
+      ('c11', 'New single preview', 'free', null, 8),
+      ('c12', 'Pilau, my way', 'followers', null, 9),
     ];
     for (final (creatorId, caption, access, price, asset) in seeds) {
       final mediaId = 'm${++_seq}';

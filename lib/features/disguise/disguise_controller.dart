@@ -6,7 +6,7 @@ import 'icon_switcher.dart';
 import 'pin_store.dart';
 
 enum Disguise {
-  none('Content', Icons.apps),
+  none('Raha', Icons.apps),
   weather('Weather', Icons.cloud),
   notes('Notes', Icons.sticky_note_2),
   calendar('Calendar', Icons.calendar_month),
