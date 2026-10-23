@@ -222,8 +222,11 @@ class _Shell extends StatelessWidget {
       body: shell,
       bottomNavigationBar: NavigationBar(
         selectedIndex: shell.currentIndex,
-        onDestinationSelected: (i) =>
-            shell.goBranch(i, initialLocation: i == shell.currentIndex),
+        onDestinationSelected: (i) {
+          // A toast from one tab shouldn't float over the next tab's controls.
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          shell.goBranch(i, initialLocation: i == shell.currentIndex);
+        },
         destinations: [
           for (final tab in tabs)
             NavigationDestination(icon: Icon(tab.icon), label: tab.label),
