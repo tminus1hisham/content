@@ -531,58 +531,81 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('Sign in'),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
         leading: BackButton(onPressed: () => context.go('/welcome')),
       ),
-      body: Form(
-        key: _form,
-        child: _EntryBody(
-          children: [
-            TextFormField(
-              key: const ValueKey('login-identifier'),
-              controller: _identifier,
-              decoration: const InputDecoration(labelText: 'Email or phone'),
-              keyboardType: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.username],
-              validator: (v) => normalizeIdentifier(v ?? '') == null
-                  ? 'Enter a valid email or phone number'
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              key: const ValueKey('login-password'),
-              controller: _password,
-              decoration: const InputDecoration(labelText: 'Password'),
-              obscureText: true,
-              autofillHints: const [AutofillHints.password],
-              validator: (v) =>
-                  (v ?? '').isEmpty ? 'Enter your password' : null,
-              onFieldSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 16),
-            _Error(_error),
-            FilledButton(
-              key: const ValueKey('login-submit'),
-              onPressed: _busy ? null : _submit,
-              child: const Text('Sign in'),
-            ),
-            TextButton(
-              onPressed: () => context.go('/register'),
-              child: const Text('Create an account'),
-            ),
-            if (usingFakeBackend)
-              Text(
-                'Demo: fan@demo.ke, creator@demo.ke or new@demo.ke, '
-                'password password123',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: Colors.black,
+          image: DecorationImage(
+            image: AssetImage('assets/demo/login_bg.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Form(
+          key: _form,
+          child: _EntryBody(
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: _fields(context),
+                  ),
+                ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+
+  List<Widget> _fields(BuildContext context) => [
+    TextFormField(
+      key: const ValueKey('login-identifier'),
+      controller: _identifier,
+      decoration: const InputDecoration(labelText: 'Email or phone'),
+      keyboardType: TextInputType.emailAddress,
+      autofillHints: const [AutofillHints.username],
+      validator: (v) => normalizeIdentifier(v ?? '') == null
+          ? 'Enter a valid email or phone number'
+          : null,
+    ),
+    const SizedBox(height: 16),
+    TextFormField(
+      key: const ValueKey('login-password'),
+      controller: _password,
+      decoration: const InputDecoration(labelText: 'Password'),
+      obscureText: true,
+      autofillHints: const [AutofillHints.password],
+      validator: (v) => (v ?? '').isEmpty ? 'Enter your password' : null,
+      onFieldSubmitted: (_) => _submit(),
+    ),
+    const SizedBox(height: 16),
+    _Error(_error),
+    FilledButton(
+      key: const ValueKey('login-submit'),
+      onPressed: _busy ? null : _submit,
+      child: const Text('Sign in'),
+    ),
+    TextButton(
+      onPressed: () => context.go('/register'),
+      child: const Text('Create an account'),
+    ),
+    if (usingFakeBackend)
+      Text(
+        'Demo: fan@demo.ke, creator@demo.ke or new@demo.ke, '
+        'password password123',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+  ];
 }
 
 /// IT.md A4. Choosing creator only starts onboarding; it never skips checks.
