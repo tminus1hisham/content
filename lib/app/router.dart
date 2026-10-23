@@ -94,18 +94,6 @@ final _tabScreens = <String, Widget Function()>{
   '/go-live': GoLiveScreen.new,
 };
 
-/// Tabs whose screens pad their own scroll content for the frosted tab bar;
-/// the rest are kept above it until they are revamped.
-const _edgeToEdge = {
-  '/discover',
-  '/following',
-  '/profile',
-  '/inbox',
-  '/messages',
-  '/live',
-  '/go-live',
-};
-
 /// Rebuilt when the role changes, which swaps the bottom-nav shell. Lock and
 /// disguise changes only re-run the redirect (see [lockRedirect]).
 final routerProvider = Provider<GoRouter>((ref) {
@@ -150,19 +138,9 @@ final routerProvider = Provider<GoRouter>((ref) {
               routes: [
                 GoRoute(
                   path: tab.path,
-                  builder: (_, _) {
-                    final screen =
-                        _tabScreens[tab.path]?.call() ??
-                        PlaceholderScreen(title: tab.label);
-                    return _edgeToEdge.contains(tab.path)
-                        ? screen
-                        : SafeArea(
-                            top: false,
-                            left: false,
-                            right: false,
-                            child: screen,
-                          );
-                  },
+                  builder: (_, _) =>
+                      _tabScreens[tab.path]?.call() ??
+                      PlaceholderScreen(title: tab.label),
                 ),
               ],
             ),
