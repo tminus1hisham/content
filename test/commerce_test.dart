@@ -144,6 +144,7 @@ void main() {
         },
       );
 
+      final before = (await dio.get<Map>('/creators/me/earnings')).data!;
       expect(await _code(request(50000)), 'AMOUNT_OUT_OF_RANGE');
       expect(await _code(request(1300000)), 'INSUFFICIENT_BALANCE');
       expect(await _code(request(200000)), isNull);
@@ -151,9 +152,14 @@ void main() {
 
       final earnings = (await dio.get<Map>('/creators/me/earnings')).data!;
       expect(earnings['availableCents'], 1045000);
-      expect(earnings['reservedCents'], 200000);
       expect(
-        (await dio.get<List>('/creators/me/payout-requests')).data,
+        earnings['reservedCents'],
+        (before['reservedCents'] as int) + 200000,
+      );
+      expect(
+        (await dio.get<List>(
+          '/creators/me/payout-requests',
+        )).data!.where((p) => p['amountCents'] == 200000),
         hasLength(1),
       );
       expect(_ledgerTotal(), 0);
@@ -227,6 +233,6 @@ void main() {
     await _tap(tester, find.text('Confirm'));
 
     expect(available().data, 'KSh 10,450');
-    expect(find.text('Requested'), findsOneWidget);
+    expect(find.text('Requested'), findsNWidgets(2)); // seeded + this one
   });
 }

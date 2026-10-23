@@ -50,6 +50,10 @@ class FakeAuthDb {
     _users['new@demo.ke'] = _User('u3', 'new@demo.ke', 'password123', [
       'creator',
     ], true);
+    // A creator waiting for staff review (admin app demo).
+    _users['pending@demo.ke'] = _User('u5', 'pending@demo.ke', 'password123', [
+      'creator',
+    ], true);
   }
 
   /// A signed-in session for a seeded user, for tests and demos.

@@ -143,6 +143,14 @@ class FakeContentDb {
     }
   }
 
+  /// Moderation: hides the post from everyone but its creator.
+  bool restrictPost(String postId) {
+    final post = _posts[postId];
+    if (post == null) return false;
+    post.status = 'restricted';
+    return true;
+  }
+
   void grantPurchase(String fanId, String postId) =>
       _purchases.add('$fanId|$postId');
 

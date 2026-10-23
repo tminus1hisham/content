@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../features/admin/fake_admin.dart';
 import '../features/auth/fake_auth.dart';
 import '../features/commerce/fake_commerce.dart';
 import '../features/content/fake_content.dart';
@@ -21,6 +22,7 @@ final Map<String, FakeHandler> fakeRoutes = {
   ...fakeCommerceDb.routes,
   ...fakeMessagingDb.routes,
   ...fakeLiveDb.routes,
+  ...fakeAdminDb.routes,
 };
 
 /// Restores every fake table to its seed data.
@@ -31,6 +33,7 @@ void resetFakeBackend() {
   fakeCommerceDb.reset();
   fakeMessagingDb.reset(); // after content: it seeds attachment media
   fakeLiveDb.reset();
+  fakeAdminDb.reset();
 }
 
 /// Simulated network delay; tests set it to zero.

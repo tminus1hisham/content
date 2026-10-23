@@ -59,6 +59,17 @@ class FakeMessagingDb {
           priceCents: 10000,
         ),
       );
+    reports.add({
+      'caseId': 'CASE-1000',
+      'reporterId': 'u1',
+      'targetType': 'post',
+      'targetId': 'p4',
+      'reason': 'non_consensual',
+      'details': 'I think the person shown did not agree to this.',
+      'priority': 'urgent',
+      'status': 'open',
+      'createdAt': '2026-10-21T08:00:00Z',
+    });
     fakeContentDb.media['msg-media-1'] = FakeMedia(
       'msg-media-1',
       'u2',

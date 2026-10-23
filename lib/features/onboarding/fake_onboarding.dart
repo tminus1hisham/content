@@ -107,10 +107,67 @@ class FakeOnboardingDb {
         'verified': true,
       }
       ..reviewStatus = 'approved';
+    _creators['u5'] = _Creator()
+      ..identity = 'verified'
+      ..profile = {
+        'displayName': 'Pendo Atieno',
+        'handle': 'pendo',
+        'bio': 'Fashion and styling.',
+        'categories': ['Fashion'],
+        'language': 'en',
+        'location': 'Kisumu',
+        'discoverable': true,
+      }
+      ..contract = {
+        'id': 'contract-u5',
+        'version': _offerVersion,
+        'documentHash': _documentHash(),
+        'signedAt': '2026-10-20T10:00:00Z',
+        'signatureName': 'Pendo Atieno',
+      }
+      ..payout = {
+        'id': 'pm-u5',
+        'type': 'mpesa',
+        'phone': '+254733000555',
+        'accountName': 'Pendo Atieno',
+        'verified': true,
+      }
+      ..reviewStatus = 'under_review';
   }
 
   /// Fake admin action (M9 adds the real admin screens).
   void approve(String userId) => _creators[userId]?.reviewStatus = 'approved';
+
+  int get signedContracts =>
+      _creators.values.where((c) => c.contract != null).length;
+
+  void setReviewStatus(String userId, String status) =>
+      _creators[userId]?.reviewStatus = status;
+
+  Iterable<String> idsWithStatus(String status) => _creators.entries
+      .where((e) => (e.value.reviewStatus ?? 'incomplete') == status)
+      .map((e) => e.key);
+
+  /// What staff see in creator review (IT.md ADM3): outcomes, not documents.
+  Map<String, Object?>? reviewSummary(String userId) {
+    final c = _creators[userId];
+    if (c == null) return null;
+    return {
+      'userId': userId,
+      'displayName': c.profile?['displayName'],
+      'handle': c.profile?['handle'],
+      'status': c.reviewStatus ?? 'incomplete',
+      'identity': c.identity,
+      'contract': c.contract == null
+          ? null
+          : {
+              'version': c.contract!['version'],
+              'signedAt': c.contract!['signedAt'],
+            },
+      'payoutVerified': c.payout?['verified'] == true,
+      'categories': c.profile?['categories'],
+    };
+  }
 
   Iterable<String> get approvedIds => _creators.keys.where(isApproved);
 

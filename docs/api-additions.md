@@ -135,3 +135,30 @@ Tickets and tips are bought through `POST /orders`:
 When a tip payment succeeds, **the server** sends a LiveKit data message on topic `tip` with `{name, amountCents}`. The app only believes tip, slow-mode and moderation messages that come from the server, and pin messages that come from the creator's identity. Data topics are `chat` `{text}`, `pin` `{text}`, `tip` and `moderation` `{slowModeSeconds?, muted?, removed?}`.
 
 Without `--dart-define=LIVEKIT_URL=…` the app runs the room in demo mode, with no real video and chat that stays on the device.
+
+## Staff (admin) API (§9.13 plus additions)
+
+The admin web app is `lib/main_admin.dart`. Staff are a separate account type, and every route checks **one granular permission** from IT.md §7.3:
+
+`creator.verification.review`, `moderation.case.read`, `moderation.case.resolve`, `finance.payout.approve`, `finance.payout.initiate`, `contracts.template.manage`, `admin.config.manage`, `admin.roles.manage`, `audit.sensitive_access.read`.
+
+A missing permission returns `403 FORBIDDEN`. Every write is recorded in the audit log.
+
+| Method | Endpoint | Notes |
+| --- | --- | --- |
+| POST | `/admin/auth/login` | **New.** Body `{email, password, mfaCode}`. Returns `{accessToken, refreshToken, staff: {id, email, name, role, permissions[], mfaEnabled}}`. Errors: `401 INVALID_CREDENTIALS`, `MFA_REQUIRED`, `MFA_INVALID`. The app signs out after 15 minutes idle |
+| GET | `/admin/me` | **New.** The signed-in staff member |
+| GET | `/admin/dashboard` | `{pendingCreators, openReports, urgentReports, payoutsToReview, reconciliationExceptions}` |
+| GET | `/admin/creators?status=under_review` | **New.** `[{userId, displayName, handle, status, identity, contract: {version, signedAt}, payoutVerified, categories}]`. Shows outcomes only, never identity documents |
+| POST | `/admin/creators/{id}/review` | **New** (instead of `/admin/verification/{id}/review`). Body `{decision: approve\|request_info\|reject\|suspend, reason}`. Every decision except `approve` needs a reason (`400 REASON_REQUIRED`) |
+| GET | `/admin/moderation/cases` | Urgent cases first. `reporterId` is withheld |
+| POST | `/admin/moderation/cases/{id}/actions` | Body `{action: dismiss\|restrict_content\|suspend_user, reasonCode}` |
+| GET | `/admin/payouts?status=` | Payout JSON plus `creatorId`, `approvedBy`, `rejectReason` |
+| POST | `/admin/payouts/{id}/approve` | `requested` → `approved` |
+| POST | `/admin/payouts/{id}/submit` | `approved` → sent to M-Pesa. **Dual control:** the approver gets `409 DUAL_CONTROL_REQUIRED` |
+| POST | `/admin/payouts/{id}/reject` | Body `{reason}`. The reserved amount goes back to available |
+| GET | `/admin/contracts/templates` | `[{id, title, versions: [{version, status, commissionPercent, effectiveFrom, signedCount}]}]` |
+| GET | `/admin/configuration` | `{commissionPercent, minPriceCents, maxPriceCents, payoutMinimumCents, currencies, countries}` |
+| PATCH | `/admin/configuration/commissionPercent` | Body `{value: 0..50}`. Applies to **new** transactions only (FR-PRC-005). Logged as `before -> after` |
+| GET | `/admin/audit-events` | `[{at, staff, action, target, detail}]` |
+| GET | `/admin/staff` | Staff with role, permissions and MFA status |

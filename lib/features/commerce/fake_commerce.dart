@@ -99,9 +99,15 @@ class _Payout {
   final String creatorId;
   final int amountCents;
   final String destination;
-  String status = 'requested';
+  String status = 'requested'; // requested | approved | paid | rejected
+  String? approvedBy;
+  String? rejectReason;
   final createdAt = DateTime.now().toUtc();
 }
+
+/// Commission for new transactions; staff change it in the admin app. Past
+/// transactions keep the rate they were posted with (FR-PRC-005).
+var currentCommissionPercent = commissionPercent;
 
 class FakeCommerceDb {
   final _orders = <String, _Order>{};
@@ -168,6 +174,26 @@ class FakeCommerceDb {
     ledger
       ..add(_Entry('t-seed-3', 'creator:u2:available', 2000000))
       ..add(_Entry('t-seed-3', 'provider:mpesa:clearing', -2000000));
+    currentCommissionPercent = commissionPercent;
+    // Amani has asked for KSh 5,000 (finance queue demo), funded by one more
+    // settled sale so her available balance stays KSh 12,450.
+    _post(
+      _Tx(
+        't-seed-4',
+        'u2',
+        'sale',
+        'Earlier sales',
+        625000,
+        125000,
+        'settled',
+        DateTime.utc(2026, 10, 5),
+      ),
+      settled: true,
+    );
+    _payouts.add(_Payout('po-seed', 'u2', 500000, 'M-Pesa +254 ••• 111'));
+    ledger
+      ..add(_Entry('po-seed', 'creator:u2:available', 500000))
+      ..add(_Entry('po-seed', 'creator:u2:reserved', -500000));
   }
 
   /// Balanced entries for a sale: asset = creator share + commission.
@@ -202,7 +228,91 @@ class FakeCommerceDb {
       .fold<int>(0, (s, t) => s + t.grossCents);
 
   static int commissionOf(int grossCents) =>
-      (grossCents * commissionPercent + 50) ~/ 100;
+      (grossCents * currentCommissionPercent + 50) ~/ 100;
+
+  List<Map<String, Object?>> payoutsFor(String? status) => [
+    for (final p in _payouts.reversed.where(
+      (p) => status == null || p.status == status,
+    ))
+      {
+        ..._payoutJson(p),
+        'creatorId': p.creatorId,
+        'approvedBy': p.approvedBy,
+        'rejectReason': p.rejectReason,
+      },
+  ];
+
+  _Payout? _payout(String id) => _payouts.where((p) => p.id == id).firstOrNull;
+
+  (int, Object?) approvePayout(String id, String staffId) {
+    final p = _payout(id);
+    if (p == null) return _notFound;
+    if (p.status != 'requested') {
+      return _error(
+        409,
+        'INVALID_STATE',
+        'Only requested payouts can be approved',
+      );
+    }
+    p
+      ..status = 'approved'
+      ..approvedBy = staffId;
+    return (200, _payoutJson(p));
+  }
+
+  /// Sends the approved payout to M-Pesa. A different staff member must do
+  /// this than the one who approved it (dual control, IT.md 7.3).
+  (int, Object?) submitPayout(String id, String staffId) {
+    final p = _payout(id);
+    if (p == null) return _notFound;
+    if (p.status != 'approved') {
+      return _error(409, 'INVALID_STATE', 'Approve the payout first');
+    }
+    if (p.approvedBy == staffId) {
+      return _error(
+        409,
+        'DUAL_CONTROL_REQUIRED',
+        'A different finance user must send this payout',
+      );
+    }
+    p.status = 'paid'; // the fake M-Pesa B2C confirms immediately
+    ledger
+      ..add(_Entry(p.id, 'creator:${p.creatorId}:reserved', p.amountCents))
+      ..add(_Entry(p.id, 'provider:mpesa:clearing', -p.amountCents));
+    _txs.add(
+      _Tx(
+        't-${p.id}',
+        p.creatorId,
+        'payout',
+        'Payout to ${p.destination}',
+        p.amountCents,
+        0,
+        'paid',
+        DateTime.now().toUtc(),
+      ),
+    );
+    return (200, _payoutJson(p));
+  }
+
+  (int, Object?) rejectPayout(String id, String reason) {
+    final p = _payout(id);
+    if (p == null) return _notFound;
+    if (p.status != 'requested' && p.status != 'approved') {
+      return _error(
+        409,
+        'INVALID_STATE',
+        'This payout can no longer be rejected',
+      );
+    }
+    p
+      ..status = 'rejected'
+      ..rejectReason = reason;
+    // Reserved goes back to available.
+    ledger
+      ..add(_Entry(p.id, 'creator:${p.creatorId}:reserved', p.amountCents))
+      ..add(_Entry(p.id, 'creator:${p.creatorId}:available', -p.amountCents));
+    return (200, _payoutJson(p));
+  }
 
   int _tierPrice(String creatorId) => creatorId == 'u2' ? 50000 : 30000;
 
@@ -528,7 +638,7 @@ class FakeCommerceDb {
           'reservedCents': balance(userId, 'reserved'),
           'paidOutCents': paidOut(userId),
           'adjustmentsCents': 0,
-          'commissionPercent': commissionPercent,
+          'commissionPercent': currentCommissionPercent,
           'payoutMinimumCents': payoutMinimumCents,
           'payoutMaximumCents': payoutMaximumCents,
         },
