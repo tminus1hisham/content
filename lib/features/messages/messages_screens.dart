@@ -298,12 +298,16 @@ class _ConversationTile extends StatelessWidget {
                           ),
                           if (awaiting) ...[
                             const SizedBox(width: 10),
-                            Container(
-                              width: 9,
-                              height: 9,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: scheme.primary,
+                            // Not just colour: screen readers hear what it means.
+                            Semantics(
+                              label: 'Waiting for your reply',
+                              child: Container(
+                                width: 9,
+                                height: 9,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: scheme.primary,
+                                ),
                               ),
                             ),
                           ],

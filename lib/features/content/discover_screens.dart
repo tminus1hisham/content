@@ -488,7 +488,7 @@ class FollowingScreen extends ConsumerWidget {
 }
 
 /// IT.md F4.
-class CreatorPage extends ConsumerWidget {
+class CreatorPage extends ConsumerStatefulWidget {
   const CreatorPage({super.key, required this.handle, this.heroTag});
   final String handle;
 
@@ -496,17 +496,34 @@ class CreatorPage extends ConsumerWidget {
   final String? heroTag;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CreatorPage> createState() => _CreatorPageState();
+}
+
+class _CreatorPageState extends ConsumerState<CreatorPage> {
+  /// Scrolled past the banner: the bar needs its own background again.
+  bool _scrolled = false;
+
+  bool _onScroll(ScrollNotification n) {
+    final scrolled = n.metrics.axis == Axis.vertical && n.metrics.pixels > 96;
+    if (scrolled != _scrolled) setState(() => _scrolled = scrolled);
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final handle = widget.handle;
     final creator = ref.watch(creatorProvider(handle));
-    final loaded = creator.hasValue;
-    // Over the dark banner once loaded; normal colours over the skeleton.
-    final onBanner = loaded ? Colors.white : null;
+    final loaded = creator.hasValue && !creator.hasError;
+    // White over the dark banner; normal colours over the skeleton, an error,
+    // or the page once the banner has scrolled away.
+    final overBanner = loaded && !_scrolled;
+    final onBanner = overBanner ? Colors.white : null;
     return Scaffold(
       extendBodyBehindAppBar: loaded,
       appBar: AppBar(
-        backgroundColor: loaded ? Colors.transparent : null,
+        backgroundColor: overBanner ? Colors.transparent : null,
         foregroundColor: onBanner,
-        systemOverlayStyle: loaded ? SystemUiOverlayStyle.light : null,
+        systemOverlayStyle: overBanner ? SystemUiOverlayStyle.light : null,
         title: Text('@$handle'),
         actions: [
           PopupMenuButton<String>(
@@ -528,10 +545,13 @@ class CreatorPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: asyncBody(
-        creator,
-        () => ref.invalidate(creatorProvider(handle)),
-        (c) => _CreatorBody(creator: c, heroTag: heroTag),
+      body: NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: asyncBody(
+          creator,
+          () => ref.invalidate(creatorProvider(handle)),
+          (c) => _CreatorBody(creator: c, heroTag: widget.heroTag),
+        ),
       ),
     );
   }

@@ -1206,7 +1206,13 @@ class _RoleScreenState extends ConsumerState<RoleScreen> {
       await ref.read(roleProvider.notifier).set(view);
       await ref.read(authProvider.notifier).setRoles(roles);
     } catch (e) {
-      if (mounted) setState(() => _error = apiErrorMessage(e));
+      // The choice wasn't saved, so no card should look selected.
+      if (mounted) {
+        setState(() {
+          _error = apiErrorMessage(e);
+          _picked = null;
+        });
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
