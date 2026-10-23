@@ -25,10 +25,11 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Security'),
             onTap: () => context.push('/settings/security'),
           ),
-          const ListTile(
-            leading: Icon(Icons.privacy_tip_outlined),
-            title: Text('Privacy'),
-            subtitle: Text('Coming soon'),
+          ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('Privacy'),
+            subtitle: const Text('Notifications, sessions, blocks, your data'),
+            onTap: () => context.push('/settings/privacy'),
           ),
         ],
       ),

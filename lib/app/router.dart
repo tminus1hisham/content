@@ -16,6 +16,7 @@ import '../features/onboarding/onboarding_screens.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/settings/appearance_screen.dart';
 import '../features/settings/disguise_screen.dart';
+import '../features/settings/privacy_screen.dart';
 import '../features/settings/security_screen.dart';
 import '../features/settings/settings_screen.dart';
 
@@ -198,6 +199,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: 'disguise', builder: (_, _) => const DisguiseScreen()),
           GoRoute(path: 'security', builder: (_, _) => const SecurityScreen()),
+          GoRoute(path: 'privacy', builder: (_, _) => const PrivacyScreen()),
         ],
       ),
     ],

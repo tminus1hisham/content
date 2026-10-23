@@ -21,8 +21,33 @@ class LockState {
   final bool unlocked;
 }
 
+const relockKey = 'lock.relockSeconds';
+const relockChoices = {
+  0: 'Immediately',
+  60: 'After 1 minute',
+  300: 'After 5 minutes',
+  900: 'After 15 minutes',
+};
+
+/// How long the app may sit in the background before it locks again.
+class RelockController extends Notifier<int> {
+  @override
+  int build() {
+    final stored = ref.watch(sharedPreferencesProvider).get(relockKey);
+    return stored is int && relockChoices.containsKey(stored) ? stored : 60;
+  }
+
+  Future<void> set(int seconds) async {
+    state = seconds;
+    await ref.read(sharedPreferencesProvider).setInt(relockKey, seconds);
+  }
+}
+
+final relockProvider = NotifierProvider<RelockController, int>(
+  RelockController.new,
+);
+
 class LockController extends Notifier<LockState> {
-  static const relockAfter = Duration(seconds: 60);
   DateTime? _backgroundedAt;
 
   @override
@@ -50,7 +75,8 @@ class LockController extends Notifier<LockState> {
       case AppLifecycleState.resumed:
         final at = _backgroundedAt;
         _backgroundedAt = null;
-        if (at != null && DateTime.now().difference(at) > relockAfter) lock();
+        final after = Duration(seconds: ref.read(relockProvider));
+        if (at != null && DateTime.now().difference(at) >= after) lock();
       case _:
         break;
     }

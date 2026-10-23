@@ -55,6 +55,21 @@ class SecurityScreen extends ConsumerWidget {
               },
             ),
           ],
+          ListTile(
+            leading: const Icon(Icons.timer_outlined),
+            title: const Text('Lock again'),
+            enabled: hasPin,
+            trailing: DropdownButton<int>(
+              value: ref.watch(relockProvider),
+              onChanged: hasPin
+                  ? (v) => ref.read(relockProvider.notifier).set(v!)
+                  : null,
+              items: [
+                for (final MapEntry(:key, :value) in relockChoices.entries)
+                  DropdownMenuItem(value: key, child: Text(value)),
+              ],
+            ),
+          ),
           SwitchListTile(
             secondary: const Icon(Icons.fingerprint),
             title: const Text('Unlock with biometrics'),

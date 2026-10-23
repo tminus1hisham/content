@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -19,6 +20,12 @@ Dio _bareDio() {
     BaseOptions(
       baseUrl:
           '${usingFakeBackend ? 'https://fake.local' : _apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/v1',
+      // Labels the session in Settings > Privacy > Active sessions.
+      headers: {
+        'X-Client-Device': kIsWeb
+            ? 'Web browser'
+            : '${defaultTargetPlatform.name} app',
+      },
     ),
   );
   if (usingFakeBackend) dio.interceptors.add(FakeBackendInterceptor());

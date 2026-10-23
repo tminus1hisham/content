@@ -34,11 +34,21 @@ class FakeAuthDb {
     reset();
   }
 
+  /// token (access or refresh) -> session id, and session id -> details.
+  final _sessionOf = <String, String>{};
+  final _sessions = <String, Map<String, Object?>>{};
+  final _preferences = <String, Map<String, Object?>>{};
+  final deletionRequests = <String, DateTime>{};
+
   void reset() {
     _users.clear();
     _verifications.clear();
     _access.clear();
     _refresh.clear();
+    _sessionOf.clear();
+    _sessions.clear();
+    _preferences.clear();
+    deletionRequests.clear();
     _users['fan@demo.ke'] = _User('u1', 'fan@demo.ke', 'password123', [
       'fan',
     ], true);
@@ -65,6 +75,34 @@ class FakeAuthDb {
 
   _User? _byId(String id) => _users.values.where((u) => u.id == id).firstOrNull;
 
+  static String? _bearer(RequestOptions request) =>
+      (request.headers['Authorization'] as String?)?.replaceFirst(
+        'Bearer ',
+        '',
+      );
+
+  void _endSession(String sid) {
+    _sessions.remove(sid);
+    final tokens = [
+      for (final MapEntry(:key, :value) in _sessionOf.entries)
+        if (value == sid) key,
+    ];
+    for (final token in tokens) {
+      _sessionOf.remove(token);
+      _access.remove(token);
+      _refresh.remove(token);
+    }
+  }
+
+  Map<String, Object?> _prefs(String userId) => _preferences.putIfAbsent(
+    userId,
+    () => {
+      'discreetNotifications': true,
+      'messageAlerts': true,
+      'newContentAlerts': true,
+    },
+  );
+
   /// The signed-in user's id for a request, or null without a valid token.
   String? callerId(RequestOptions request) {
     final header = request.headers['Authorization'] as String?;
@@ -76,11 +114,27 @@ class FakeAuthDb {
     return userId == null ? null : _byId(userId);
   }
 
-  Map<String, Object?> _session(_User user) {
+  Map<String, Object?> _session(
+    _User user, {
+    String? sessionId,
+    String? device,
+  }) {
     final access = 'fake-access-${user.id}-${++_seq}';
     final refresh = 'fake-refresh-${user.id}-$_seq';
     _access[access] = user.id;
     _refresh[refresh] = user.id;
+    final sid = sessionId ?? 'sess-$_seq';
+    _sessions.putIfAbsent(
+      sid,
+      () => {
+        'id': sid,
+        'userId': user.id,
+        'device': device ?? 'Unknown device',
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
+    _sessionOf[access] = sid;
+    _sessionOf[refresh] = sid;
     return {
       'accessToken': access,
       'refreshToken': refresh,
@@ -153,16 +207,98 @@ class FakeAuthDb {
           },
         );
       }
-      return (200, _session(user));
+      return (
+        200,
+        _session(user, device: req.headers['X-Client-Device'] as String?),
+      );
     },
     'POST /auth/refresh': (req, _) {
-      final userId = _refresh.remove((req.data as Map)['refreshToken']);
+      final token = (req.data as Map)['refreshToken'];
+      final userId = _refresh.remove(token);
+      final sid = _sessionOf.remove(token);
       final user = userId == null ? null : _byId(userId);
-      return user == null ? unauthorized : (200, _session(user));
+      return user == null
+          ? unauthorized
+          : (200, _session(user, sessionId: sid));
     },
     'POST /auth/logout': (req, _) {
-      _refresh.remove((req.data as Map?)?['refreshToken']);
+      final sid = _sessionOf[(req.data as Map?)?['refreshToken']];
+      if (sid != null) _endSession(sid);
       return (204, null);
+    },
+    'GET /auth/sessions': (req, _) {
+      final userId = callerId(req);
+      if (userId == null) return unauthorized;
+      final current = _sessionOf[_bearer(req)];
+      return (
+        200,
+        [
+          for (final s in _sessions.values.where((s) => s['userId'] == userId))
+            {...s, 'current': s['id'] == current}..remove('userId'),
+        ],
+      );
+    },
+    'DELETE /auth/sessions/{id}': (req, params) {
+      final userId = callerId(req);
+      if (userId == null) return unauthorized;
+      if (_sessions[params['id']]?['userId'] != userId) {
+        return (404, {'code': 'NOT_FOUND', 'message': 'No such session'});
+      }
+      _endSession(params['id']!);
+      return (204, null);
+    },
+    'GET /users/me/preferences': (req, _) {
+      final userId = callerId(req);
+      if (userId == null) return unauthorized;
+      return (200, _prefs(userId));
+    },
+    'PATCH /users/me/preferences': (req, _) {
+      final userId = callerId(req);
+      if (userId == null) return unauthorized;
+      final prefs = _prefs(userId);
+      for (final MapEntry(:key, :value) in (req.data as Map).entries) {
+        if (prefs.containsKey(key) && value is bool) {
+          prefs[key as String] = value;
+        }
+      }
+      return (200, prefs);
+    },
+    'POST /users/me/data-export': (req, _) {
+      final userId = callerId(req);
+      if (userId == null) return unauthorized;
+      return (
+        202,
+        {
+          'reference': 'EXP-${userId.toUpperCase()}-${++_seq}',
+          'status': 'requested',
+        },
+      );
+    },
+    // Closes the account after a 30-day grace period and signs out everywhere.
+    'POST /users/me/deletion-request': (req, _) {
+      final userId = callerId(req);
+      if (userId == null) return unauthorized;
+      if ((req.data as Map?)?['confirm'] != 'DELETE') {
+        return (
+          400,
+          {
+            'code': 'CONFIRMATION_REQUIRED',
+            'message': 'Type DELETE to confirm',
+          },
+        );
+      }
+      final effectiveAt = DateTime.now().toUtc().add(const Duration(days: 30));
+      deletionRequests[userId] = effectiveAt;
+      for (final sid in [
+        for (final s in _sessions.values)
+          if (s['userId'] == userId) s['id'] as String,
+      ]) {
+        _endSession(sid);
+      }
+      return (
+        202,
+        {'status': 'scheduled', 'effectiveAt': effectiveAt.toIso8601String()},
+      );
     },
     'GET /users/me': (req, _) {
       final user = _caller(req);

@@ -262,6 +262,16 @@ class FakeMessagingDb {
       _messages.add(m);
       return (201, _messageJson(m, userId));
     }),
+    'GET /users/me/blocks': (req, _) => _signedIn(
+      req,
+      (userId) => (
+        200,
+        [
+          for (final b in _blocks.where((b) => b.startsWith('$userId|')))
+            _person(b.split('|')[1]),
+        ],
+      ),
+    ),
     'POST /users/{id}/block': (req, params) => _signedIn(req, (userId) {
       _blocks.add('$userId|${params['id']}');
       return (204, null);

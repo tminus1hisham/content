@@ -162,3 +162,17 @@ A missing permission returns `403 FORBIDDEN`. Every write is recorded in the aud
 | PATCH | `/admin/configuration/commissionPercent` | Body `{value: 0..50}`. Applies to **new** transactions only (FR-PRC-005). Logged as `before -> after` |
 | GET | `/admin/audit-events` | `[{at, staff, action, target, detail}]` |
 | GET | `/admin/staff` | Staff with role, permissions and MFA status |
+
+## Privacy and account (IT.md F12, US-F04)
+
+| Method | Endpoint | Notes |
+| --- | --- | --- |
+| GET | `/auth/sessions` | `[{id, device, createdAt, current}]`. The app sends an `X-Client-Device` header at login so the session has a readable label |
+| DELETE | `/auth/sessions/{id}` | Revokes that session's access and refresh tokens |
+| GET | `/users/me/preferences` | **New.** `{discreetNotifications, messageAlerts, newContentAlerts}`. `discreetNotifications` defaults to **true** |
+| PATCH | `/users/me/preferences` | **New.** Partial update with boolean values only |
+| GET | `/users/me/blocks` | **New.** `[{id, displayName, handle?}]` |
+| POST | `/users/me/data-export` | **New.** `202 {reference, status}` |
+| POST | `/users/me/deletion-request` | **New.** Body `{confirm: "DELETE"}`. Returns `202 {status: "scheduled", effectiveAt}` (30 days) and signs the user out everywhere. Financial records are kept as the law requires |
+
+**Push notifications** (not built yet) must respect `discreetNotifications`: the push should contain no names, captions or previews.
