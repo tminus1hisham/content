@@ -570,6 +570,13 @@ class _CreatorBodyState extends ConsumerState<_CreatorBody> {
   late Creator _creator = widget.creator;
   bool _busy = false;
 
+  // A refetch (e.g. after checkout) brings a fresh creator; show it.
+  @override
+  void didUpdateWidget(_CreatorBody old) {
+    super.didUpdateWidget(old);
+    if (widget.creator != old.creator) _creator = widget.creator;
+  }
+
   Future<void> _toggleFollow() async {
     HapticFeedback.lightImpact();
     setState(() => _busy = true);

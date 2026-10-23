@@ -193,6 +193,25 @@ void main() {
     expect(find.byType(MediaView), findsWidgets);
   });
 
+  testWidgets('the profile shows Subscribed as soon as checkout is done', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await _tap(tester, find.text('Amani'));
+    await _tap(tester, find.byKey(const ValueKey('subscribe')));
+    await tester.enterText(
+      find.byKey(const ValueKey('checkout-phone')),
+      '0712 345 678',
+    );
+    await _tap(tester, find.byKey(const ValueKey('checkout-pay')));
+    await _waitForPayment(tester);
+    expect(find.text('Payment received'), findsOneWidget);
+    await _tap(tester, find.text('Done'));
+
+    expect(find.text('Subscribed'), findsOneWidget);
+    expect(find.textContaining('Subscribe ·'), findsNothing);
+  });
+
   testWidgets('a failed payment says so and keeps the post locked', (
     tester,
   ) async {
