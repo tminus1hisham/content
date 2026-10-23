@@ -180,13 +180,26 @@ class _ConversationTile extends StatelessWidget {
         : last['attachment'] != null && (last['text'] as String).isEmpty
         ? '📎 Attachment'
         : last['text'] as String;
+    final theme = Theme.of(context);
     return ListTile(
-      leading: CircleAvatar(child: Text((other['displayName'] as String)[0])),
-      title: Text(other['displayName'] as String),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: CircleAvatar(
+        radius: 24,
+        backgroundColor: theme.colorScheme.primaryContainer,
+        foregroundColor: theme.colorScheme.onPrimaryContainer,
+        child: Text((other['displayName'] as String)[0]),
+      ),
+      title: Text(
+        other['displayName'] as String,
+        style: theme.textTheme.titleMedium,
+      ),
       subtitle: Text(
         conversation['blocked'] == true ? 'Blocked' : preview,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
       ),
       onTap: () => context.push('/chat/${conversation['id']}'),
     );
@@ -307,6 +320,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const pill = OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(28)),
+      borderSide: BorderSide.none,
+    );
     final thread = ref.watch(threadProvider(widget.id));
     final me = ref.watch(authProvider).user?.id;
     final canSell = ref.watch(creatorApprovedProvider);
@@ -378,6 +395,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     if (canSell)
                       IconButton(
@@ -392,9 +410,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         minLines: 1,
                         maxLines: 4,
                         maxLength: 2000,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           hintText: 'Message',
                           counterText: '',
+                          filled: true,
+                          fillColor: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerLow,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          border: pill,
+                          enabledBorder: pill,
+                          focusedBorder: pill,
                         ),
                       ),
                     ),
@@ -431,19 +460,28 @@ class _Bubble extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final attachment = message['attachment'] as _Json?;
     final text = message['text'] as String;
+    final textTheme = Theme.of(context).textTheme;
+    final fg = mine ? scheme.onPrimary : scheme.onSurface;
+    final created = DateTime.tryParse('${message['createdAt']}')?.toLocal();
+    const big = Radius.circular(20), tail = Radius.circular(6);
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onLongPress: mine ? null : onReport,
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.all(10),
-          constraints: const BoxConstraints(maxWidth: 300),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.sizeOf(context).width * 0.75,
+          ),
           decoration: BoxDecoration(
-            color: mine
-                ? scheme.primaryContainer
-                : scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(16),
+            color: mine ? scheme.primary : scheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.only(
+              topLeft: big,
+              topRight: big,
+              bottomLeft: mine ? big : tail,
+              bottomRight: mine ? tail : big,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -465,11 +503,23 @@ class _Bubble extends StatelessWidget {
                 if (mine && attachment['priceCents'] != null)
                   Text(
                     'Sold for ${formatKes(attachment['priceCents'] as int)}',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: textTheme.bodySmall?.copyWith(color: fg),
                   ),
                 if (text.isNotEmpty) const SizedBox(height: 6),
               ],
-              if (text.isNotEmpty) Text(text),
+              if (text.isNotEmpty)
+                Text(text, style: textTheme.bodyMedium?.copyWith(color: fg)),
+              if (created != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  MaterialLocalizations.of(
+                    context,
+                  ).formatTimeOfDay(TimeOfDay.fromDateTime(created)),
+                  style: textTheme.labelSmall?.copyWith(
+                    color: mine ? scheme.onPrimary : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
