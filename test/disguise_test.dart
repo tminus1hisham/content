@@ -3,6 +3,8 @@ import 'package:content/features/disguise/disguise_controller.dart';
 import 'package:content/features/disguise/icon_switcher.dart';
 import 'package:content/features/disguise/lock_gate.dart';
 import 'package:content/features/disguise/pin_store.dart';
+import 'package:content/features/disguise/pin_pad.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,6 +37,23 @@ void main() {
           iconCalls.add(call.arguments as String);
           return null;
         });
+  });
+
+  testWidgets('the PIN pad delete key is announced as a Delete button', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PinPad(title: 'PIN', onSubmit: (_) async => null),
+        ),
+      ),
+    );
+    final node = tester.getSemantics(find.byKey(const ValueKey('pin-back')));
+    expect(node.label, 'Delete');
+    expect(node.flagsCollection.isButton, isTrue);
+    semantics.dispose();
   });
 
   test('cannot enable a disguise without a PIN', () async {

@@ -776,6 +776,7 @@ class _Bubble extends StatelessWidget {
                               )
                             : MediaView(
                                 mediaId: attachment['mediaId'] as String,
+                                semanticLabel: 'Photo',
                               ),
                       ),
                     ),
