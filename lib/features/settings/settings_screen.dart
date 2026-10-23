@@ -13,18 +13,24 @@ class SettingsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
-        label,
-        style: Theme.of(
-          context,
-        ).textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      child: Semantics(
+        header: true,
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: scheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Rounded card grouping a set of tiles.
+/// Rounded card grouping a set of tiles: a raised surface with a hairline
+/// border and hairline dividers between rows.
 class SettingsGroup extends StatelessWidget {
   const SettingsGroup({required this.children, super.key});
 
@@ -32,36 +38,57 @@ class SettingsGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      clipBehavior: Clip.antiAlias,
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(cardRadius)),
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Material(
+        color: scheme.surfaceContainerLow,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(cardRadius)),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (i, child) in children.indexed) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 16,
+                  endIndent: 16,
+                  color: scheme.outlineVariant.withValues(alpha: 0.5),
+                ),
+              child,
+            ],
+          ],
+        ),
       ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
 }
 
 /// Leading icon in a tonal rounded square.
 class SettingsIcon extends StatelessWidget {
-  const SettingsIcon(this.icon, {super.key});
+  const SettingsIcon(this.icon, {this.color, super.key});
 
   final IconData icon;
+
+  /// Icon colour; defaults to the accent.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(10),
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: SizedBox.square(
         dimension: 36,
-        child: Icon(icon, size: 20, color: scheme.onPrimaryContainer),
+        child: Icon(icon, size: 20, color: color ?? scheme.primary),
       ),
     );
   }

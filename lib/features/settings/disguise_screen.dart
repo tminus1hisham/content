@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/motion.dart';
+import '../../app/theme.dart';
+import '../../app/ui.dart';
 import '../disguise/disguise_controller.dart';
 import '../disguise/lock_gate.dart';
 import '../disguise/pin_pad.dart';
@@ -51,15 +54,34 @@ class DisguiseScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text(
-            'Disguise changes the app icon and name on your home screen. '
-            'While it is on, opening the app shows a working decoy app. '
-            'Your PIN gets you back in:\n'
-            '• Calculator: type your PIN, then press =\n'
-            '• Notes, Calendar, Weather: press and hold the title at the top, '
-            'then enter your PIN',
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerLow,
+              borderRadius: const BorderRadius.all(Radius.circular(cardRadius)),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.shield_outlined, color: scheme.primary),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Disguise changes the app icon and name on your home screen. '
+                      'While it is on, opening the app shows a working decoy app. '
+                      'Your PIN gets you back in:\n'
+                      '• Calculator: type your PIN, then press =\n'
+                      '• Notes, Calendar, Weather: press and hold the title at the top, '
+                      'then enter your PIN',
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -110,36 +132,52 @@ class _Option extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    const radius = BorderRadius.all(Radius.circular(cardRadius));
     return Semantics(
       button: true,
       selected: selected,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 96,
-          padding: const EdgeInsets.all(8),
+      child: Pressable(
+        child: AnimatedContainer(
+          duration: motion(context, shortDuration),
+          curve: easeOut,
+          width: 100,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            color: selected
+                ? scheme.surfaceContainerHigh
+                : scheme.surfaceContainerLow,
+            borderRadius: radius,
             border: Border.all(
-              color: selected ? scheme.primary : Colors.transparent,
-              width: 2,
+              color: selected ? scheme.primary : scheme.outlineVariant,
+              width: selected ? 2 : 1,
             ),
           ),
-          child: Column(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: _tiles[disguise],
-                  borderRadius: BorderRadius.circular(14),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: radius,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: _tiles[disguise],
+                        borderRadius: BorderRadius.circular(controlRadius),
+                      ),
+                      child: Icon(disguise.icon, color: Colors.white, size: 32),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      disguise == Disguise.none ? 'Default' : disguise.label,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-                child: Icon(disguise.icon, color: Colors.white, size: 32),
               ),
-              const SizedBox(height: 6),
-              Text(disguise == Disguise.none ? 'Default' : disguise.label),
-            ],
+            ),
           ),
         ),
       ),
