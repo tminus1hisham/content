@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
 import '../../core/money.dart';
+import '../commerce/commerce_api.dart';
 import 'content_api.dart';
 import 'media_view.dart';
 
@@ -24,11 +25,6 @@ Widget asyncBody<T>(
     ),
   ),
 );
-
-/// Checkout arrives in M6; until then unlock buttons say so.
-void comingSoon(BuildContext context) => ScaffoldMessenger.of(
-  context,
-).showSnackBar(const SnackBar(content: Text('Checkout is coming soon')));
 
 /// IT.md F3.
 class DiscoverScreen extends ConsumerStatefulWidget {
@@ -210,6 +206,7 @@ class _CreatorBodyState extends ConsumerState<_CreatorBody> {
     final c = _creator;
     final text = Theme.of(context).textTheme;
     final posts = ref.watch(creatorPostsProvider(c.id));
+    final tier = ref.watch(tiersProvider(c.id)).valueOrNull?.firstOrNull;
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -280,11 +277,19 @@ class _CreatorBodyState extends ConsumerState<_CreatorBody> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton(
+                        key: const ValueKey('subscribe'),
                         onPressed: c.isSubscribed
                             ? null
-                            : () => comingSoon(context),
+                            : () => context.push(
+                                '/checkout/subscription/${c.id}',
+                              ),
                         child: Text(
-                          c.isSubscribed ? 'Subscribed' : 'Subscribe',
+                          c.isSubscribed
+                              ? 'Subscribed'
+                              : tier == null
+                              ? 'Subscribe'
+                              : 'Subscribe · '
+                                    '${formatKes(tier['priceCents'] as int)}/mo',
                         ),
                       ),
                     ),
@@ -414,7 +419,11 @@ class PostDetailScreen extends ConsumerWidget {
                       key: const ValueKey('unlock'),
                       onPressed: () => locked.access == 'followers'
                           ? context.push('/c/${locked.creatorHandle}')
-                          : comingSoon(context),
+                          : locked.access == 'paid'
+                          ? context.push('/checkout/post/${locked.id}')
+                          : context.push(
+                              '/checkout/subscription/${locked.creatorId}',
+                            ),
                       child: Text(switch (locked.access) {
                         'paid' => 'Unlock for ${formatKes(locked.priceCents!)}',
                         'subscribers' => 'Subscribe to unlock',

@@ -79,3 +79,24 @@ The app does one PUT per file today. Tell us which resumable protocol you choose
 | `DELETE /posts/{id}` | Soft delete, so purchases stay traceable |
 | `POST`/`DELETE /creators/{id}/follow` | Return the creator JSON |
 | `GET /discovery/creators?q=&category=` | Approved, discoverable creators |
+
+## Checkout, subscriptions, earnings and payouts (§9.8–9.10, §10)
+
+Every amount is an integer in cents, in KES. The app only **displays** amounts. The server prices orders and computes commission, net amounts and balances.
+
+| Endpoint | Request | Response and errors |
+| --- | --- | --- |
+| `POST /orders` | `{type: post\|subscription, itemId, idempotencyKey}`. For a subscription, `itemId` is the creator id. Any client-sent amount is ignored | `201 {id, type, itemId, creatorId, description, currency, amountCents, feesCents, totalCents, recurring, status, createdAt}`. A repeated key returns `200` with the same order. `400 NOT_PURCHASABLE` |
+| `POST /orders/{id}/checkout` | `{method: "mpesa", phone: "+2547…", idempotencyKey}` | `201 {id, orderId, status: "processing", method}`. Sends the STK push. `409 ALREADY_PAID`, `400 INVALID_PHONE` |
+| `GET /payments/{id}` | — | `{id, orderId, status, method, failureReason?}`. `status` uses the §10.3 states. The app polls every 2 s for about 90 s |
+| `POST /payments/provider-webhooks/{provider}` | Provider payload | Must be verified and idempotent. One entitlement and one balanced set of ledger entries per payment |
+| `GET /creators/{id}/subscription-tiers` | — | `[{id, name, priceCents, currency, interval, benefits[]}]` |
+| `GET /fans/me/purchases` | — | Orders that are paid or being refunded, as order JSON |
+| `POST /orders/{id}/refund-requests` | `{reason}` | `201 {id, status}`. `409 NOT_REFUNDABLE` |
+| `GET /fans/me/subscriptions` | — | `[{id, creator, priceCents, currency, status: active\|cancelled\|expired, renewsAt?, endsAt, benefits[]}]` |
+| `POST /subscriptions/{id}/cancel` | — | Stops renewal. Access continues until `endsAt` |
+| `GET /creators/me/earnings` | — | `{currency, pendingCents, availableCents, reservedCents, paidOutCents, adjustmentsCents, commissionPercent, payoutMinimumCents, payoutMaximumCents}` |
+| `GET /creators/me/transactions` | — | `[{id, type: sale\|subscription\|payout\|refund, description, currency, grossCents, commissionCents, feesCents, netCents, status, contractRef, createdAt}]` |
+| `POST /creators/me/payout-requests` | `{amountCents, payoutMethodId, idempotencyKey}` | `201 {id, amountCents, currency, destination, status, createdAt}`. Moves the amount from available to reserved. Errors: `400 AMOUNT_OUT_OF_RANGE`, `400 INSUFFICIENT_BALANCE`, `400 DESTINATION_NOT_VERIFIED`, `403 CREATOR_NOT_APPROVED` |
+
+Subscriptions are started through `POST /orders` with `type: subscription`, not through `POST /subscriptions`, so every payment goes through the same order, payment and ledger path.

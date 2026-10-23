@@ -119,6 +119,8 @@ class FakeOnboardingDb {
 
   Map<String, Object?>? profileOf(String userId) => _creators[userId]?.profile;
 
+  Map<String, Object?>? payoutOf(String userId) => _creators[userId]?.payout;
+
   (int, Object?) _withCreator(
     RequestOptions req,
     (int, Object?) Function(String userId, _Creator creator) handle,

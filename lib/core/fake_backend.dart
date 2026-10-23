@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../features/auth/fake_auth.dart';
+import '../features/commerce/fake_commerce.dart';
 import '../features/content/fake_content.dart';
 import '../features/onboarding/fake_onboarding.dart';
 
@@ -15,6 +16,7 @@ final Map<String, FakeHandler> fakeRoutes = {
   ...fakeAuthDb.routes,
   ...fakeOnboardingDb.routes,
   ...fakeContentDb.routes,
+  ...fakeCommerceDb.routes,
 };
 
 /// Restores every fake table to its seed data.
@@ -22,6 +24,7 @@ void resetFakeBackend() {
   fakeAuthDb.reset();
   fakeOnboardingDb.reset();
   fakeContentDb.reset();
+  fakeCommerceDb.reset();
 }
 
 /// Simulated network delay; tests set it to zero.

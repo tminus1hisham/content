@@ -7,6 +7,7 @@ import '../features/auth/auth_controller.dart';
 import '../features/auth/auth_screens.dart';
 import '../features/disguise/disguise_controller.dart';
 import '../features/disguise/lock_gate.dart';
+import '../features/commerce/commerce_screens.dart';
 import '../features/content/discover_screens.dart';
 import '../features/content/studio_screens.dart';
 import '../features/onboarding/onboarding_screens.dart';
@@ -141,6 +142,24 @@ final routerProvider = Provider<GoRouter>((ref) {
             PostDetailScreen(id: state.pathParameters['id']!),
       ),
       GoRoute(path: '/studio/new', builder: (_, _) => const ComposerScreen()),
+      GoRoute(
+        path: '/checkout/:type/:id',
+        builder: (_, state) => CheckoutScreen(
+          type: state.pathParameters['type']!,
+          itemId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(path: '/library', builder: (_, _) => const LibraryScreen()),
+      GoRoute(
+        path: '/earnings',
+        builder: (_, _) => const EarningsScreen(),
+        routes: [
+          GoRoute(
+            path: 'payout',
+            builder: (_, _) => const PayoutRequestScreen(),
+          ),
+        ],
+      ),
       GoRoute(
         path: '/onboarding',
         builder: (_, _) => const OnboardingScreen(),

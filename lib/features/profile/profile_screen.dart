@@ -39,16 +39,18 @@ class ProfileScreen extends ConsumerWidget {
               subtitle: Text(roles.join(' · ')),
             ),
           if (role == UserRole.fan)
-            const ListTile(
-              leading: Icon(Icons.collections_bookmark_outlined),
-              title: Text('My library'),
-              subtitle: Text('Coming soon'),
+            ListTile(
+              leading: const Icon(Icons.collections_bookmark_outlined),
+              title: const Text('My library'),
+              subtitle: const Text('Purchases, receipts and subscriptions'),
+              onTap: () => context.push('/library'),
             )
           else
-            const ListTile(
-              leading: Icon(Icons.account_balance_wallet_outlined),
-              title: Text('Earnings'),
-              subtitle: Text('Coming soon'),
+            ListTile(
+              leading: const Icon(Icons.account_balance_wallet_outlined),
+              title: const Text('Earnings'),
+              subtitle: const Text('Balance, transactions and payouts'),
+              onTap: () => context.push('/earnings'),
             ),
           ListTile(
             leading: const Icon(Icons.settings_outlined),
