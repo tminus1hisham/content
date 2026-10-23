@@ -153,7 +153,7 @@ class InboxScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(authProvider).user?.id;
     return Scaffold(
-      appBar: AppBar(title: const Text('Messages')),
+      appBar: tabAppBar(context, 'Messages'),
       body: asyncBody(
         ref.watch(conversationsProvider),
         () => ref.invalidate(conversationsProvider),

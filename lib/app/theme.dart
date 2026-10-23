@@ -106,6 +106,19 @@ ColorScheme _scheme(Color accent, Brightness brightness) {
     brightness: brightness,
     dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
   );
+  final scheme = _surfaces(seeded, brightness);
+  // Fidelity's secondaryContainer is a muddy maroon on these surfaces; tonal
+  // buttons and icon tiles get a faint accent tint over the raised surface.
+  return scheme.copyWith(
+    secondaryContainer: Color.alphaBlend(
+      scheme.primary.withValues(alpha: 0.14),
+      scheme.surfaceContainerHigh,
+    ),
+    onSecondaryContainer: scheme.onSurface,
+  );
+}
+
+ColorScheme _surfaces(ColorScheme seeded, Brightness brightness) {
   if (brightness == Brightness.dark) {
     return seeded.copyWith(
       surface: const Color(0xFF0E0A0D),
@@ -261,6 +274,8 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
+      // Depth from tone, not shadow: a drop shadow reads as a dark ring here.
+      elevation: 0,
       shape: controlShape,
       backgroundColor: scheme.inverseSurface,
       contentTextStyle: textTheme.bodyMedium?.copyWith(

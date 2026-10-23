@@ -37,6 +37,15 @@ ButtonStyle brandButtonStyle(BuildContext context) {
   );
 }
 
+/// App bar for a tab's root screen: a large title, matching the headings on
+/// Discover, Studio and Profile.
+AppBar tabAppBar(BuildContext context, String title, {List<Widget>? actions}) =>
+    AppBar(
+      toolbarHeight: 76,
+      title: Text(title, style: Theme.of(context).textTheme.headlineMedium),
+      actions: actions,
+    );
+
 /// Scales its child to [scale] while pressed. Visual only: the child keeps its
 /// own InkWell or button for taps, focus and semantics.
 class Pressable extends StatefulWidget {

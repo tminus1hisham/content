@@ -467,7 +467,7 @@ class FollowingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Following')),
+      appBar: tabAppBar(context, 'Following'),
       body: asyncBody(
         ref.watch(followingProvider),
         () => ref.invalidate(followingProvider),

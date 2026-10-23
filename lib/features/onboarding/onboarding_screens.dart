@@ -101,24 +101,28 @@ class CreatorHomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final onboarding = ref.watch(onboardingProvider);
+    // No app bar: the dashboard's greeting card is the header, like the
+    // other tabs' large titles.
     return Scaffold(
-      appBar: AppBar(title: const Text('Home')),
-      body: asyncBody(onboarding, () => ref.invalidate(onboardingProvider), (
-        status,
-      ) {
-        if (status.approved) return const CreatorDashboard();
-        return _page([
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.verified_user_outlined),
-              title: const Text('Finish setting up to start earning'),
-              subtitle: Text(statusLabels[status.status] ?? status.status),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/onboarding'),
+      body: SafeArea(
+        bottom: false,
+        child: asyncBody(onboarding, () => ref.invalidate(onboardingProvider), (
+          status,
+        ) {
+          if (status.approved) return const CreatorDashboard();
+          return _page([
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.verified_user_outlined),
+                title: const Text('Finish setting up to start earning'),
+                subtitle: Text(statusLabels[status.status] ?? status.status),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/onboarding'),
+              ),
             ),
-          ),
-        ]);
-      }),
+          ]);
+        }),
+      ),
     );
   }
 }

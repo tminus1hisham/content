@@ -62,7 +62,7 @@ class LiveNowScreen extends ConsumerWidget {
     final bottom = MediaQuery.paddingOf(context).bottom;
     final gutter = _gutter(context, 640);
     return Scaffold(
-      appBar: AppBar(title: const Text('Live now')),
+      appBar: tabAppBar(context, 'Live now'),
       body: Stack(
         children: [
           const Positioned.fill(child: GlowBackground()),
@@ -500,7 +500,7 @@ class _GoLiveScreenState extends ConsumerState<GoLiveScreen> {
     final bottom = MediaQuery.paddingOf(context).bottom;
     final gutter = _gutter(context, 560);
     return Scaffold(
-      appBar: AppBar(title: const Text('Go live')),
+      appBar: tabAppBar(context, 'Go live'),
       body: !approved
           ? Padding(
               padding: EdgeInsets.only(bottom: bottom),
