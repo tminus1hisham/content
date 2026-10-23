@@ -148,7 +148,7 @@ void main() {
     expect(find.text('Adults only'), findsOneWidget);
 
     final now = DateTime.now();
-    await enterBirthDate('${now.month}/${now.day}/${now.year - 10}');
+    await enterBirthDate('${now.day}/${now.month}/${now.year - 10}');
     expect(find.textContaining('must be 18 or older'), findsOneWidget);
     expect(find.text('Create account'), findsNothing);
   });
@@ -159,7 +159,7 @@ void main() {
     await pumpApp(tester, adult: false, signedInAs: null);
     await _tapText(tester, 'Enter date of birth');
     await _tapText(tester, 'Type it instead');
-    await tester.enterText(find.byType(TextField), '01/15/1990');
+    await tester.enterText(find.byType(TextField), '15/01/1990');
     await _tapText(tester, 'OK');
     expect(find.text('Create account'), findsOneWidget);
   });

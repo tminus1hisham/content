@@ -54,6 +54,8 @@ class _BirthDateSheetState extends State<_BirthDateSheet> {
     final now = widget.now;
     final picked = await showDatePicker(
       context: context,
+      // dd/mm/yyyy, as Kenyans write it.
+      locale: const Locale('en', 'GB'),
       initialEntryMode: DatePickerEntryMode.input,
       firstDate: DateTime(now.year - 120),
       lastDate: now,

@@ -1,6 +1,7 @@
 import 'package:content/app/birth_date_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -10,6 +11,12 @@ void main() {
     result = null;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('en', 'US'), Locale('en', 'GB')],
         home: Builder(
           builder: (context) => Scaffold(
             body: Center(
@@ -72,5 +79,16 @@ void main() {
       tester.widget<Text>(find.text('11 years')).style?.color,
       scheme.onErrorContainer,
     );
+  });
+
+  testWidgets('typed date is read as dd/mm/yyyy', (tester) async {
+    await open(tester);
+    await tester.tap(find.text('Type it instead'));
+    await tester.pumpAndSettle();
+    expect(find.text('dd/mm/yyyy'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '15/06/1995');
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(result, DateTime(1995, 6, 15));
   });
 }
