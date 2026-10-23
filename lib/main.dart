@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -34,6 +35,14 @@ class App extends ConsumerWidget {
       theme: buildTheme(accent, Brightness.light),
       darkTheme: buildTheme(accent, Brightness.dark),
       themeMode: settings.themeMode,
+      // en_US stays the app locale; en_GB is only for the typed birth date.
+      locale: const Locale('en', 'US'),
+      supportedLocales: const [Locale('en', 'US'), Locale('en', 'GB')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       routerConfig: ref.watch(routerProvider),
     );
   }
