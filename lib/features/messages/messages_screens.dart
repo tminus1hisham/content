@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../app/theme.dart';
 import '../../core/api_client.dart';
 import '../../core/money.dart';
 import '../auth/auth_controller.dart';
@@ -321,7 +322,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     const pill = OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(28)),
+      borderRadius: BorderRadius.all(Radius.circular(sheetRadius)),
       borderSide: BorderSide.none,
     );
     final thread = ref.watch(threadProvider(widget.id));
