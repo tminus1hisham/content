@@ -592,6 +592,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _identifier = TextEditingController();
   final _password = TextEditingController();
   String _country = 'KE';
+  static const _termsError = 'Accept the terms to continue';
   bool _accepted = false;
   bool _busy = false;
   String? _error;
@@ -606,7 +607,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
     if (!_accepted) {
-      setState(() => _error = 'Accept the terms to continue');
+      setState(() => _error = _termsError);
       return;
     }
     setState(() {
@@ -694,7 +695,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 CheckboxListTile(
                   key: const ValueKey('register-terms'),
                   value: _accepted,
-                  onChanged: (v) => setState(() => _accepted = v!),
+                  onChanged: (v) => setState(() {
+                    _accepted = v!;
+                    if (_accepted && _error == _termsError) _error = null;
+                  }),
                   contentPadding: EdgeInsets.zero,
                   controlAffinity: ListTileControlAffinity.leading,
                   shape: const RoundedRectangleBorder(

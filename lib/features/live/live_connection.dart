@@ -310,10 +310,8 @@ class DemoConnection extends LiveConnection {
   Future<void> flipCamera() async {}
 
   @override
-  Widget video(BuildContext context) => const _NoVideo(
-    'Demo mode: run with --dart-define=LIVEKIT_URL=... and '
-    'LIVEKIT_DEV_TOKEN=... to stream real video.',
-  );
+  Widget video(BuildContext context) =>
+      const _NoVideo("Video isn't available in this demo.");
 
   @override
   Future<void> dispose() async {

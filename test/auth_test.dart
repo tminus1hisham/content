@@ -109,6 +109,24 @@ void main() {
     expect(find.text('Discover'), findsWidgets);
   });
 
+  testWidgets('the terms warning clears once the box is ticked', (
+    tester,
+  ) async {
+    await pumpApp(tester, signedInAs: null);
+    await _tapText(tester, 'Create account');
+    await _enter(tester, 'register-identifier', '0712 345 678');
+    await _enter(tester, 'register-password', 'longenough');
+    await tester.ensureVisible(find.byKey(const ValueKey('register-submit')));
+    await tester.tap(find.byKey(const ValueKey('register-submit')));
+    await tester.pumpAndSettle();
+    expect(find.text('Accept the terms to continue'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('register-terms')));
+    await tester.tap(find.byKey(const ValueKey('register-terms')));
+    await tester.pumpAndSettle();
+    expect(find.text('Accept the terms to continue'), findsNothing);
+  });
+
   testWidgets('register, verify the OTP, choose creator', (tester) async {
     await pumpApp(tester, signedInAs: null);
     await _tapText(tester, 'Create account');

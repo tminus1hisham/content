@@ -233,6 +233,8 @@ void main() {
 
     await tester.pump(const Duration(seconds: 6));
     expect(find.textContaining('Hello from Nakuru'), findsOneWidget);
+    expect(find.text("Video isn't available in this demo."), findsOneWidget);
+    expect(find.textContaining('--dart-define'), findsNothing);
   });
 
   testWidgets('a ticketed stream asks for a ticket, then lets the fan in', (
