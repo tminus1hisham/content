@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/birth_date_picker.dart';
 import '../../app/router.dart';
 import '../../core/api_client.dart';
 import 'auth_controller.dart';
@@ -68,13 +69,7 @@ class _AgeGateScreenState extends ConsumerState<AgeGateScreen> {
 
   Future<void> _pickBirthDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialEntryMode: DatePickerEntryMode.input,
-      firstDate: DateTime(now.year - 120),
-      lastDate: now,
-      helpText: 'Date of birth',
-    );
+    final picked = await showBirthDatePicker(context);
     if (picked == null) return;
     if (isAdult(picked, now)) {
       await ref.read(ageGateProvider.notifier).confirm();

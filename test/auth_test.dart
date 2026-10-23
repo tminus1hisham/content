@@ -139,6 +139,7 @@ void main() {
   testWidgets('age gate: under 18 is refused, adult continues', (tester) async {
     Future<void> enterBirthDate(String date) async {
       await _tapText(tester, 'Enter date of birth');
+      await _tapText(tester, 'Type it instead');
       await tester.enterText(find.byType(TextField), date);
       await _tapText(tester, 'OK');
     }
@@ -157,6 +158,7 @@ void main() {
   ) async {
     await pumpApp(tester, adult: false, signedInAs: null);
     await _tapText(tester, 'Enter date of birth');
+    await _tapText(tester, 'Type it instead');
     await tester.enterText(find.byType(TextField), '01/15/1990');
     await _tapText(tester, 'OK');
     expect(find.text('Create account'), findsOneWidget);
