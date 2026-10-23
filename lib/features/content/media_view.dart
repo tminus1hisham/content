@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../app/ui.dart';
 import '../../core/money.dart';
 import 'content_api.dart';
 import 'fake_content.dart';
@@ -136,7 +137,7 @@ class LockedMedia extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = switch (post.access) {
+    final labelText = switch (post.access) {
       'paid' => 'Unlock for ${formatKes(post.priceCents ?? 0)}',
       'subscribers' => 'Subscribers only',
       'followers' => 'Follow to see this',
@@ -149,21 +150,65 @@ class LockedMedia extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         Image.asset('assets/covers/$cover.jpg', fit: BoxFit.cover),
-        const ColoredBox(color: Colors.black45),
-        Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.lock_outline, size: 40, color: Colors.white),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(color: Colors.white),
-              ),
-            ],
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x33000000), Color(0x99000000)],
+            ),
           ),
+        ),
+        // Grid tiles get a smaller pill so the price is never cut off.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 260;
+            final label = Text(
+              labelText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style:
+                  (compact
+                          ? Theme.of(context).textTheme.labelMedium
+                          : Theme.of(context).textTheme.labelLarge)
+                      ?.copyWith(color: Colors.white),
+            );
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Glass(
+                  borderRadius: const BorderRadius.all(Radius.circular(999)),
+                  color: Colors.black.withValues(alpha: 0.35),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.18),
+                  ),
+                  child: Padding(
+                    padding: compact
+                        ? const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 7,
+                          )
+                        : const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.lock_outline,
+                          size: compact ? 14 : 18,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: compact ? 6 : 8),
+                        Flexible(child: label),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
