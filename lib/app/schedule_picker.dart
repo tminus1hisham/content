@@ -174,7 +174,13 @@ class _SchedulePickerSheetState extends State<_SchedulePickerSheet> {
               ),
             ],
           ),
-          if (selected != null) ...[
+          if (selected != null && !canConfirm) ...[
+            const SizedBox(height: 20),
+            Text(
+              'That time has passed. Pick a later one.',
+              style: text.bodyMedium?.copyWith(color: scheme.error),
+            ),
+          ] else if (selected != null) ...[
             const SizedBox(height: 20),
             DecoratedBox(
               decoration: BoxDecoration(
