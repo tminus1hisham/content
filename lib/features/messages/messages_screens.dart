@@ -404,9 +404,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, int.tryParse(price.text)),
-            child: const Text('Send'),
+          ListenableBuilder(
+            listenable: price,
+            builder: (context, _) {
+              final kes = int.tryParse(price.text) ?? 0;
+              return TextButton(
+                onPressed: kes > 0 ? () => Navigator.pop(context, kes) : null,
+                child: const Text('Send'),
+              );
+            },
           ),
         ],
       ),

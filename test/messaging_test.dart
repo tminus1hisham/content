@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'helpers.dart';
@@ -35,6 +36,14 @@ Future<String?> _code(Future<Object?> request) =>
 Future<Map> _attachment(Dio dio) async {
   final thread = (await dio.get<Map>('/conversations/conv1/messages')).data!;
   return ((thread['messages'] as List).last as Map)['attachment'] as Map;
+}
+
+class _FakePicker extends ImagePickerPlatform {
+  @override
+  Future<XFile?> getImageFromSource({
+    required ImageSource source,
+    ImagePickerOptions options = const ImagePickerOptions(),
+  }) async => XFile('assets/demo/6.jpg', name: 'sunset.jpg');
 }
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
@@ -181,6 +190,35 @@ void main() {
     expect(find.text('A little something just for you'), findsOneWidget);
     expect(find.textContaining('Sold for'), findsNothing);
     expect(find.text('Paid · KSh 100'), findsOneWidget);
+  });
+
+  testWidgets('a paid photo cannot be sent without a price', (tester) async {
+    ImagePickerPlatform.instance = _FakePicker();
+    await pumpApp(
+      tester,
+      signedInAs: 'creator@demo.ke',
+      prefs: {roleKey: 'creator'},
+    );
+    await _tap(
+      tester,
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Messages'),
+      ),
+    );
+    await _tap(tester, find.text('Fan U1'));
+    await _tap(tester, find.byTooltip('Send a paid photo'));
+    TextButton send() => tester.widget(find.widgetWithText(TextButton, 'Send'));
+    expect(send().onPressed, isNull);
+    await tester.enterText(find.byKey(const ValueKey('attachment-price')), '0');
+    await tester.pump();
+    expect(send().onPressed, isNull);
+    await tester.enterText(
+      find.byKey(const ValueKey('attachment-price')),
+      '50',
+    );
+    await tester.pump();
+    expect(send().onPressed, isNotNull);
   });
 
   testWidgets('message a creator from their page, then report them', (
