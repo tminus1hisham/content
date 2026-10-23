@@ -4,17 +4,22 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/motion.dart';
+import '../../app/theme.dart';
+import '../../app/ui.dart';
 import '../../core/api_client.dart';
 import '../auth/auth_controller.dart';
+import '../content/discover_screens.dart';
 import '../content/studio_screens.dart';
 import '../auth/fake_auth.dart';
+import '../settings/settings_screen.dart';
 import 'onboarding_controller.dart';
 
 void _snack(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
-Widget _page(List<Widget> children) => ListView(
-  padding: const EdgeInsets.all(16),
+Widget _page(List<Widget> children, {double bottom = 32}) => ListView(
+  padding: EdgeInsets.fromLTRB(16, 8, 16, bottom),
   children: [
     Center(
       child: ConstrainedBox(
@@ -28,28 +33,65 @@ Widget _page(List<Widget> children) => ListView(
   ],
 );
 
-/// Shows a spinner, an error with retry, or [builder] for an AsyncValue.
-Widget _async<T>(
-  WidgetRef ref,
-  AsyncValue<T> value,
-  ProviderOrFamily provider,
-  Widget Function(T) builder,
-) => value.when(
-  data: builder,
-  loading: () => const Center(child: CircularProgressIndicator()),
-  error: (e, _) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
+TextStyle? _muted(BuildContext context, TextStyle? style) =>
+    style?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
+
+/// Readable long-form text: muted, with a comfortable line height.
+TextStyle? _prose(BuildContext context) => _muted(
+  context,
+  Theme.of(context).textTheme.bodyMedium,
+)?.copyWith(height: 1.6);
+
+/// A form section: a small heading over a grouped card.
+class _Group extends StatelessWidget {
+  const _Group({this.title, required this.children});
+  final String? title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(apiErrorMessage(e)),
-        TextButton(
-          onPressed: () => ref.invalidate(provider),
-          child: const Text('Try again'),
+        if (title != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 24, 4, 10),
+            child: Semantics(
+              header: true,
+              child: Text(
+                title!,
+                style: _muted(
+                  context,
+                  Theme.of(context).textTheme.labelLarge,
+                )?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.4),
+              ),
+            ),
+          )
+        else
+          const SizedBox(height: 16),
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: children,
+            ),
+          ),
         ),
       ],
-    ),
-  ),
+    );
+  }
+}
+
+/// A step's main action, with press feedback.
+Widget _cta(FilledButton button, {double top = 24}) => Padding(
+  padding: EdgeInsets.only(top: top),
+  child: Pressable(child: button),
 );
+
+/// Loading look for the sub-screen forms.
+const _formSkeleton = SkeletonList(count: 4, itemHeight: 64);
 
 /// Creator Home tab until the M5 dashboard: setup progress for creators who
 /// are not approved yet.
@@ -61,7 +103,9 @@ class CreatorHomeScreen extends ConsumerWidget {
     final onboarding = ref.watch(onboardingProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),
-      body: _async(ref, onboarding, onboardingProvider, (status) {
+      body: asyncBody(onboarding, () => ref.invalidate(onboardingProvider), (
+        status,
+      ) {
         if (status.approved) return const CreatorDashboard();
         return _page([
           Card(
@@ -88,89 +132,313 @@ class OnboardingScreen extends ConsumerWidget {
     final onboarding = ref.watch(onboardingProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Creator setup')),
-      body: _async(ref, onboarding, onboardingProvider, (s) {
-        final editable =
-            s.status == 'incomplete' || s.status == 'action_required';
-        Widget step(
-          String title,
-          bool done,
-          String path, {
-          String? detail,
-          bool enabled = true,
-        }) => ListTile(
-          leading: Icon(
-            done ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: done ? Theme.of(context).colorScheme.primary : null,
-          ),
-          title: Text(title),
-          subtitle: detail == null ? null : Text(detail),
-          trailing: editable && enabled
-              ? const Icon(Icons.chevron_right)
-              : null,
-          onTap: editable && enabled ? () => context.push(path) : null,
-        );
-        final identityDetail = switch (s.identity) {
-          'pending' => 'Waiting for the result',
-          'failed' => 'Not verified. Try again with a clear photo of your ID.',
-          'verified' => 'Verified',
-          _ => null,
-        };
-        return _page([
-          Card(
-            child: ListTile(
-              title: Text(statusLabels[s.status] ?? s.status),
-              subtitle: Text(switch (s.status) {
-                'under_review' =>
-                  'We are reviewing your details. This usually takes 1-2 '
-                      'working days.',
-                'approved' => 'You can now sell content and go live.',
-                'rejected' =>
-                  'Your application was not approved. Contact support to '
-                      'appeal.',
-                'suspended' => 'Your account is suspended. Contact support.',
-                _ => 'Complete each step, then submit for review.',
-              }),
+      body: asyncBody(
+        onboarding,
+        () => ref.invalidate(onboardingProvider),
+        loading: () => const SkeletonList(count: 6, itemHeight: 72),
+        (s) {
+          final editable =
+              s.status == 'incomplete' || s.status == 'action_required';
+          final identityDetail = switch (s.identity) {
+            'pending' => 'Waiting for the result',
+            'failed' =>
+              'Not verified. Try again with a clear photo of your ID.',
+            'verified' => 'Verified',
+            _ => null,
+          };
+          final steps = [
+            // Verified at sign-up: there is no screen to open.
+            (
+              title: 'Contact verified',
+              done: true,
+              path: '',
+              detail: null,
+              enabled: false,
             ),
-          ),
-          if (s.status == 'incomplete') const _EligibilityCard(),
-          step('Contact verified', true, ''),
-          step(
-            'Age and identity',
-            s.identity == 'verified',
-            '/onboarding/identity',
-            detail: identityDetail,
-            enabled: s.identity != 'verified',
-          ),
-          step('Creator profile', s.profile, '/onboarding/profile'),
-          step(
-            'Creator agreement',
-            s.contract,
-            '/onboarding/contract',
-            enabled: !s.contract,
-          ),
-          step('Payout method', s.payout, '/onboarding/payout'),
-          const SizedBox(height: 16),
-          if (editable)
-            FilledButton(
-              onPressed: s.readyToSubmit
-                  ? () async {
-                      try {
-                        await ref
-                            .read(dioProvider)
-                            .post<void>('/creators/me/submit-review');
-                        ref.invalidate(onboardingProvider);
-                      } catch (e) {
-                        if (context.mounted) {
-                          _snack(context, apiErrorMessage(e));
-                        }
-                      }
-                    }
-                  : null,
-              child: const Text('Submit for review'),
+            (
+              title: 'Age and identity',
+              done: s.identity == 'verified',
+              path: '/onboarding/identity',
+              detail: identityDetail,
+              enabled: s.identity != 'verified',
             ),
-        ]);
-      }),
+            (
+              title: 'Creator profile',
+              done: s.profile,
+              path: '/onboarding/profile',
+              detail: null,
+              enabled: true,
+            ),
+            (
+              title: 'Creator agreement',
+              done: s.contract,
+              path: '/onboarding/contract',
+              detail: null,
+              enabled: !s.contract,
+            ),
+            (
+              title: 'Payout method',
+              done: s.payout,
+              path: '/onboarding/payout',
+              detail: null,
+              enabled: true,
+            ),
+          ];
+          return _page(
+            // Room below the button, so a floating snackbar never covers it.
+            bottom: 112,
+            [
+              Entrance(
+                child: _StatusHeader(
+                  label: statusLabels[s.status] ?? s.status,
+                  message: switch (s.status) {
+                    'under_review' =>
+                      'We are reviewing your details. This usually takes 1-2 '
+                          'working days.',
+                    'approved' => 'You can now sell content and go live.',
+                    'rejected' =>
+                      'Your application was not approved. Contact support to '
+                          'appeal.',
+                    'suspended' =>
+                      'Your account is suspended. Contact support.',
+                    _ => 'Complete each step, then submit for review.',
+                  },
+                  done: steps.where((step) => step.done).length,
+                  total: steps.length,
+                ),
+              ),
+              if (s.status == 'incomplete') ...[
+                const SizedBox(height: 12),
+                const Entrance(index: 1, child: _EligibilityCard()),
+              ],
+              const SizedBox(height: 6),
+              for (final (i, step) in steps.indexed)
+                Entrance(
+                  index: i + 2,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: _StepRow(
+                      number: i + 1,
+                      title: step.title,
+                      done: step.done,
+                      detail: step.detail,
+                      onTap: editable && step.enabled
+                          ? () => context.push(step.path)
+                          : null,
+                    ),
+                  ),
+                ),
+              if (editable)
+                _cta(
+                  FilledButton(
+                    style: brandButtonStyle(context),
+                    onPressed: s.readyToSubmit
+                        ? () async {
+                            try {
+                              await ref
+                                  .read(dioProvider)
+                                  .post<void>('/creators/me/submit-review');
+                              ref.invalidate(onboardingProvider);
+                            } catch (e) {
+                              if (context.mounted) {
+                                _snack(context, apiErrorMessage(e));
+                              }
+                            }
+                          }
+                        : null,
+                    child: const Text('Submit for review'),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     );
+  }
+}
+
+/// Status over the brand glow, with a progress track lit by the gradient.
+class _StatusHeader extends StatelessWidget {
+  const _StatusHeader({
+    required this.label,
+    required this.message,
+    required this.done,
+    required this.total,
+  });
+  final String label;
+  final String message;
+  final int done;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return Material(
+      color: scheme.surfaceContainerLow,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(cardRadius)),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      child: Stack(
+        children: [
+          const Positioned.fill(child: GlowBackground()),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: text.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  message,
+                  style: _muted(
+                    context,
+                    text.bodyMedium,
+                  )?.copyWith(height: 1.45),
+                ),
+                const SizedBox(height: 20),
+                ExcludeSemantics(child: _ProgressTrack(value: done / total)),
+                const SizedBox(height: 8),
+                Text(
+                  '$done of $total steps done',
+                  style: _muted(context, text.labelMedium),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgressTrack extends StatelessWidget {
+  const _ProgressTrack({required this.value});
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = BorderRadius.all(Radius.circular(3));
+    // A null begin starts at end: the fill animates on change, not on entry.
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: value),
+      duration: motion(context, mediumDuration),
+      curve: easeOut,
+      builder: (context, v, _) => Container(
+        height: 6,
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: radius,
+        ),
+        child: FractionallySizedBox(
+          widthFactor: v,
+          heightFactor: 1,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: Brand.of(context).gradient,
+              borderRadius: radius,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One checklist step: numbered badge (a gradient check once done), title,
+/// optional detail, and a chevron when it can be opened.
+class _StepRow extends StatelessWidget {
+  const _StepRow({
+    required this.number,
+    required this.title,
+    required this.done,
+    this.detail,
+    this.onTap,
+  });
+  final int number;
+  final String title;
+  final bool done;
+  final String? detail;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final badge = Container(
+      width: 32,
+      height: 32,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: done ? Brand.of(context).gradient : null,
+        border: done
+            ? null
+            : Border.all(color: scheme.outlineVariant, width: 1.5),
+      ),
+      child: done
+          ? const Icon(Icons.check_rounded, size: 18, color: brandInk)
+          : Text(
+              '$number',
+              // Inside a fixed circle; the title next to it carries meaning.
+              textScaler: TextScaler.noScaling,
+              style: _muted(
+                context,
+                text.labelLarge,
+              )?.copyWith(fontWeight: FontWeight.w700),
+            ),
+    );
+    final card = Material(
+      color: scheme.surfaceContainerLow,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(cardRadius)),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+          child: Row(
+            children: [
+              Semantics(
+                label: done ? 'Done' : 'To do',
+                child: ExcludeSemantics(child: badge),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: text.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (detail != null) ...[
+                      const SizedBox(height: 2),
+                      Text(detail!, style: _muted(context, text.bodySmall)),
+                    ],
+                  ],
+                ),
+              ),
+              if (onTap != null)
+                Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+    return onTap == null ? card : Pressable(child: card);
   }
 }
 
@@ -179,11 +447,20 @@ class _EligibilityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Card(
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        leading: Icon(Icons.info_outline),
-        title: Text('What you need'),
-        childrenPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: const SettingsIcon(Icons.info_outline),
+        title: Text(
+          'What you need',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -193,6 +470,7 @@ class _EligibilityCard extends StatelessWidget {
             '• An M-Pesa number registered in your name for payouts.\n'
             '• Everyone in your content must be an adult who has consented.\n'
             '• Our team reviews every application before you can earn.',
+            style: _prose(context),
           ),
         ],
       ),
@@ -231,57 +509,105 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     if (identity == 'verified') {
       return Scaffold(
         appBar: AppBar(title: const Text('Age and identity')),
-        body: _page([
-          const Icon(Icons.verified, size: 64),
-          const SizedBox(height: 12),
-          const Text('You are verified.', textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: () => context.pop(),
-            child: const Text('Back to setup'),
+        body: StateView(
+          icon: Icons.verified,
+          title: 'You are verified.',
+          action: Pressable(
+            child: FilledButton(
+              style: brandButtonStyle(context),
+              onPressed: () => context.pop(),
+              child: const Text('Back to setup'),
+            ),
           ),
-        ]),
+        ),
       );
     }
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Age and identity')),
       body: _page([
-        const Text(
-          'We use a specialist verification partner to confirm you are an '
-          'adult and that you are who you say you are. You will take a photo '
-          'of your ID and a short selfie video.',
+        _Group(
+          title: 'How it works',
+          children: [
+            Text(
+              'We use a specialist verification partner to confirm you are an '
+              'adult and that you are who you say you are. You will take a '
+              'photo of your ID and a short selfie video.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(height: 1.5),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
-        Text(
-          'How we use your data: the partner checks your documents and tells '
-          'us the result. Only specially authorised staff can see identity '
-          'evidence, and it is never shown to fans.',
-          style: Theme.of(context).textTheme.bodySmall,
+        _Group(
+          title: 'Your privacy',
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SettingsIcon(Icons.lock_outline),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    'How we use your data: the partner checks your documents '
+                    'and tells us the result. Only specially authorised staff '
+                    'can see identity evidence, and it is never shown to fans.',
+                    style: _prose(context),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
         if (identity == 'failed') ...[
-          const SizedBox(height: 12),
-          const Text(
-            'Your last check did not pass. Use a valid, unexpired ID, in good '
-            'light, with all four corners visible.',
+          const SizedBox(height: 16),
+          Card(
+            margin: EdgeInsets.zero,
+            color: scheme.errorContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.error_outline, color: scheme.onErrorContainer),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Your last check did not pass. Use a valid, unexpired '
+                      'ID, in good light, with all four corners visible.',
+                      style: TextStyle(
+                        color: scheme.onErrorContainer,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
-        const SizedBox(height: 24),
         if (!_started && identity != 'pending')
-          FilledButton(
-            onPressed: _busy
-                ? null
-                : () => _run((dio) async {
-                    await dio.post<void>('/verification/sessions');
-                    setState(() => _started = true);
-                  }),
-            child: const Text('Start verification'),
+          _cta(
+            FilledButton(
+              style: brandButtonStyle(context),
+              onPressed: _busy
+                  ? null
+                  : () => _run((dio) async {
+                      await dio.post<void>('/verification/sessions');
+                      setState(() => _started = true);
+                    }),
+              child: const Text('Start verification'),
+            ),
           )
         else
-          OutlinedButton(
-            onPressed: _busy
-                ? null
-                : () => _run((dio) => dio.get<void>('/verification/status')),
-            child: const Text('Check my result'),
+          Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: OutlinedButton(
+              onPressed: _busy
+                  ? null
+                  : () => _run((dio) => dio.get<void>('/verification/status')),
+              child: const Text('Check my result'),
+            ),
           ),
       ]),
     );
@@ -401,91 +727,107 @@ class _CreatorProfileScreenState extends ConsumerState<CreatorProfileScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Creator profile')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? _formSkeleton
           : Form(
               key: _form,
               child: _page([
-                TextFormField(
-                  key: const ValueKey('profile-name'),
-                  controller: _name,
-                  decoration: const InputDecoration(labelText: 'Display name'),
-                  validator: (v) =>
-                      (v ?? '').trim().isEmpty ? 'Enter a display name' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  key: const ValueKey('profile-handle'),
-                  controller: _handle,
-                  decoration: InputDecoration(
-                    labelText: 'Handle',
-                    prefixText: '@',
-                    errorText: _handleError,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
-                  ],
-                  validator: (v) => (v ?? '').trim().length < 3
-                      ? 'At least 3 characters'
-                      : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _bio,
-                  decoration: const InputDecoration(labelText: 'Bio'),
-                  maxLines: 3,
-                  maxLength: 280,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Categories',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                _Group(
+                  title: 'About you',
                   children: [
-                    for (final category in creatorCategories)
-                      FilterChip(
-                        label: Text(category),
-                        selected: _categories.contains(category),
-                        onSelected: (on) => setState(
-                          () => on
-                              ? _categories.add(category)
-                              : _categories.remove(category),
-                        ),
+                    TextFormField(
+                      key: const ValueKey('profile-name'),
+                      controller: _name,
+                      decoration: const InputDecoration(
+                        labelText: 'Display name',
                       ),
+                      validator: (v) => (v ?? '').trim().isEmpty
+                          ? 'Enter a display name'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      key: const ValueKey('profile-handle'),
+                      controller: _handle,
+                      decoration: InputDecoration(
+                        labelText: 'Handle',
+                        prefixText: '@',
+                        errorText: _handleError,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'[a-zA-Z0-9_]'),
+                        ),
+                      ],
+                      validator: (v) => (v ?? '').trim().length < 3
+                          ? 'At least 3 characters'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _bio,
+                      decoration: const InputDecoration(labelText: 'Bio'),
+                      maxLines: 3,
+                      maxLength: 280,
+                    ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  initialValue: _language,
-                  decoration: const InputDecoration(labelText: 'Language'),
-                  items: const [
-                    DropdownMenuItem(value: 'en', child: Text('English')),
-                    DropdownMenuItem(value: 'sw', child: Text('Kiswahili')),
+                _Group(
+                  title: 'Categories',
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final category in creatorCategories)
+                          FilterChip(
+                            label: Text(category),
+                            selected: _categories.contains(category),
+                            onSelected: (on) => setState(
+                              () => on
+                                  ? _categories.add(category)
+                                  : _categories.remove(category),
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
-                  onChanged: (v) => setState(() => _language = v!),
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _location,
-                  decoration: const InputDecoration(
-                    labelText: 'Public location (optional)',
-                    hintText: 'e.g. Nairobi',
+                _Group(
+                  title: 'Preferences',
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: _language,
+                      decoration: const InputDecoration(labelText: 'Language'),
+                      items: const [
+                        DropdownMenuItem(value: 'en', child: Text('English')),
+                        DropdownMenuItem(value: 'sw', child: Text('Kiswahili')),
+                      ],
+                      onChanged: (v) => setState(() => _language = v!),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _location,
+                      decoration: const InputDecoration(
+                        labelText: 'Public location (optional)',
+                        hintText: 'e.g. Nairobi',
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Show me in Discover'),
+                      value: _discoverable,
+                      onChanged: (v) => setState(() => _discoverable = v),
+                    ),
+                  ],
+                ),
+                _cta(
+                  FilledButton(
+                    key: const ValueKey('profile-save'),
+                    style: brandButtonStyle(context),
+                    onPressed: _busy ? null : _save,
+                    child: const Text('Save'),
                   ),
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Show me in Discover'),
-                  value: _discoverable,
-                  onChanged: (v) => setState(() => _discoverable = v),
-                ),
-                const SizedBox(height: 8),
-                FilledButton(
-                  key: const ValueKey('profile-save'),
-                  onPressed: _busy ? null : _save,
-                  child: const Text('Save'),
                 ),
               ]),
             ),
@@ -590,84 +932,184 @@ class _ContractScreenState extends ConsumerState<ContractScreen> {
   @override
   Widget build(BuildContext context) {
     final offer = _offer;
+    final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final canSign =
         _readToEnd && _consent && _signature.text.trim().length >= 3 && !_busy;
     return Scaffold(
       appBar: AppBar(title: const Text('Creator agreement')),
       body: offer == null
-          ? Center(
-              child: _error == null
-                  ? const CircularProgressIndicator()
-                  : Text(_error!),
-            )
+          ? _error == null
+                ? _formSkeleton
+                : StateView(icon: Icons.description_outlined, title: _error!)
           : ListView(
               key: const ValueKey('contract-scroll'),
               controller: _scroll,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.percent),
-                    title: Text(
-                      'Platform commission: ${offer['commissionPercent']}%',
-                    ),
-                    subtitle: Text(
-                      'You keep ${100 - (offer['commissionPercent'] as int)}% '
-                      'of every sale. Version ${offer['version']}.',
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Material(
+                          color: scheme.surfaceContainerLow,
+                          clipBehavior: Clip.antiAlias,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(cardRadius),
+                            ),
+                            side: BorderSide(color: scheme.outlineVariant),
+                          ),
+                          child: Stack(
+                            children: [
+                              const Positioned.fill(child: GlowBackground()),
+                              Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SettingsIcon(Icons.percent),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Platform commission: '
+                                            '${offer['commissionPercent']}%',
+                                            style: text.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'You keep '
+                                            '${100 - (offer['commissionPercent'] as int)}% '
+                                            'of every sale. Version '
+                                            '${offer['version']}.',
+                                            style: _muted(
+                                              context,
+                                              text.bodyMedium,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _Group(
+                          title: 'Agreement',
+                          children: [
+                            for (final (i, section)
+                                in (offer['sections'] as List).indexed) ...[
+                              if (i > 0) const SizedBox(height: 20),
+                              Semantics(
+                                header: true,
+                                child: Text(
+                                  section['heading'] as String,
+                                  style: text.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                section['body'] as String,
+                                style: _prose(context),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (_readToEnd)
+                          _Group(
+                            title: 'Sign',
+                            children: [
+                              TextField(
+                                key: const ValueKey('contract-signature'),
+                                controller: _signature,
+                                decoration: const InputDecoration(
+                                  labelText:
+                                      'Type your full legal name to sign',
+                                ),
+                                onChanged: (_) => setState(() {}),
+                              ),
+                              const SizedBox(height: 4),
+                              CheckboxListTile(
+                                key: const ValueKey('contract-consent'),
+                                contentPadding: EdgeInsets.zero,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                value: _consent,
+                                onChanged: (v) => setState(() => _consent = v!),
+                                title: const Text(
+                                  'I have read this agreement and agree to '
+                                  'sign it electronically.',
+                                ),
+                              ),
+                            ],
+                          ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          children: [
+                            TextButton(
+                              onPressed: _decline,
+                              child: const Text('Decline'),
+                            ),
+                            TextButton(
+                              onPressed: () => _snack(
+                                context,
+                                'Questions? Email support before signing.',
+                              ),
+                              child: const Text('Ask support'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                for (final section in offer['sections'] as List) ...[
-                  const SizedBox(height: 16),
-                  Text(section['heading'] as String, style: text.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(section['body'] as String),
-                ],
-                const Divider(height: 32),
-                if (_readToEnd) ...[
-                  TextField(
-                    key: const ValueKey('contract-signature'),
-                    controller: _signature,
-                    decoration: const InputDecoration(
-                      labelText: 'Type your full legal name to sign',
-                    ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  CheckboxListTile(
-                    key: const ValueKey('contract-consent'),
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    value: _consent,
-                    onChanged: (v) => setState(() => _consent = v!),
-                    title: const Text(
-                      'I have read this agreement and agree to sign it '
-                      'electronically.',
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                TextButton(onPressed: _decline, child: const Text('Decline')),
-                TextButton(
-                  onPressed: () => _snack(
-                    context,
-                    'Questions? Email support before signing.',
-                  ),
-                  child: const Text('Ask support'),
                 ),
               ],
             ),
       // Always visible, so it is clear signing unlocks only after reading.
       bottomNavigationBar: offer == null
           ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: FilledButton(
-                  key: const ValueKey('contract-sign'),
-                  onPressed: canSign ? _sign : null,
-                  child: Text(
-                    _readToEnd ? 'Accept and sign' : 'Read to the end to sign',
+          : DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                border: Border(top: BorderSide(color: scheme.outlineVariant)),
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Center(
+                    heightFactor: 1,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Pressable(
+                          child: FilledButton(
+                            key: const ValueKey('contract-sign'),
+                            style: brandButtonStyle(context),
+                            onPressed: canSign ? _sign : null,
+                            child: Text(
+                              _readToEnd
+                                  ? 'Accept and sign'
+                                  : 'Read to the end to sign',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -757,95 +1199,151 @@ class _PayoutSetupScreenState extends ConsumerState<PayoutSetupScreen> {
   Widget build(BuildContext context) {
     final method = _method;
     final verified = method?['verified'] == true;
+    final text = Theme.of(context).textTheme;
+    const saveKey = ValueKey('payout-save');
+    final onSave = _busy ? null : _add;
+    const saveLabel = Text('Save and send code');
     return Scaffold(
       appBar: AppBar(title: const Text('Payout method')),
       body: _page([
         if (method != null)
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.phone_android),
-              title: Text('M-Pesa ${method['phoneMasked']}'),
-              subtitle: Text(
-                '${method['accountName']} · '
-                '${verified ? 'Verified' : 'Waiting for code'}',
+          _Group(
+            children: [
+              Row(
+                children: [
+                  SettingsIcon(
+                    verified ? Icons.verified_outlined : Icons.phone_android,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'M-Pesa ${method['phoneMasked']}',
+                          style: text.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${method['accountName']} · '
+                          '${verified ? 'Verified' : 'Waiting for code'}',
+                          style: _muted(context, text.bodySmall),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ),
+            ],
           ),
         if (method != null && !verified) ...[
-          const SizedBox(height: 16),
-          Text('Enter the code we sent by SMS to ${method['phoneMasked']}.'),
-          if (usingFakeBackend)
-            Text(
-              'Demo code: $fakeOtp',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          TextField(
-            key: const ValueKey('payout-code'),
-            controller: _code,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(labelText: 'Code'),
-          ),
-          FilledButton(
-            key: const ValueKey('payout-verify'),
-            onPressed: _busy ? null : _verify,
-            child: const Text('Verify'),
-          ),
-        ],
-        const SizedBox(height: 24),
-        Text(
-          method == null ? 'Add your M-Pesa number' : 'Replace destination',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        if (method != null)
-          Text(
-            'For your security, a new number must be verified again and '
-            'payouts may be held for a short time.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        const SizedBox(height: 12),
-        Form(
-          key: _form,
-          child: Column(
+          _Group(
+            title: 'Confirm your number',
             children: [
-              TextFormField(
-                key: const ValueKey('payout-phone'),
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'M-Pesa number',
-                  hintText: '0712 345 678',
-                ),
-                validator: (v) {
-                  final phone = normalizeIdentifier(v ?? '');
-                  return phone != null &&
-                          RegExp(r'^\+254[17]\d{8}$').hasMatch(phone)
-                      ? null
-                      : 'Enter a Kenyan M-Pesa number';
-                },
+              Text(
+                'Enter the code we sent by SMS to ${method['phoneMasked']}.',
+                style: _prose(context),
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                key: const ValueKey('payout-name'),
-                controller: _name,
-                decoration: const InputDecoration(
-                  labelText: 'Name registered on M-Pesa',
+              if (usingFakeBackend)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Demo code: $fakeOtp',
+                    style: _muted(context, text.bodySmall),
+                  ),
                 ),
-                validator: (v) =>
-                    (v ?? '').trim().length < 3 ? 'Enter the full name' : null,
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('payout-code'),
+                controller: _code,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(labelText: 'Code'),
               ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.tonal(
-                  key: const ValueKey('payout-save'),
-                  onPressed: _busy ? null : _add,
-                  child: const Text('Save and send code'),
+              _cta(
+                top: 8,
+                FilledButton(
+                  key: const ValueKey('payout-verify'),
+                  style: brandButtonStyle(context),
+                  onPressed: _busy ? null : _verify,
+                  child: const Text('Verify'),
                 ),
               ),
             ],
           ),
+        ],
+        _Group(
+          title: method == null
+              ? 'Add your M-Pesa number'
+              : 'Replace destination',
+          children: [
+            if (method != null) ...[
+              Text(
+                'For your security, a new number must be verified again and '
+                'payouts may be held for a short time.',
+                style: _muted(context, text.bodySmall)?.copyWith(height: 1.5),
+              ),
+              const SizedBox(height: 16),
+            ],
+            Form(
+              key: _form,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    key: const ValueKey('payout-phone'),
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'M-Pesa number',
+                      hintText: '0712 345 678',
+                    ),
+                    validator: (v) {
+                      final phone = normalizeIdentifier(v ?? '');
+                      return phone != null &&
+                              RegExp(r'^\+254[17]\d{8}$').hasMatch(phone)
+                          ? null
+                          : 'Enter a Kenyan M-Pesa number';
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    key: const ValueKey('payout-name'),
+                    controller: _name,
+                    decoration: const InputDecoration(
+                      labelText: 'Name registered on M-Pesa',
+                    ),
+                    validator: (v) => (v ?? '').trim().length < 3
+                        ? 'Enter the full name'
+                        : null,
+                  ),
+                  // The main action until a number exists; secondary after.
+                  if (method == null)
+                    _cta(
+                      top: 20,
+                      FilledButton(
+                        key: saveKey,
+                        style: brandButtonStyle(context),
+                        onPressed: onSave,
+                        child: saveLabel,
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.only(top: 20),
+                      child: FilledButton.tonal(
+                        key: saveKey,
+                        onPressed: onSave,
+                        child: saveLabel,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ]),
     );
