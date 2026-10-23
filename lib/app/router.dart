@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -19,6 +20,7 @@ import '../features/settings/disguise_screen.dart';
 import '../features/settings/privacy_screen.dart';
 import '../features/settings/security_screen.dart';
 import '../features/settings/settings_screen.dart';
+import 'ui.dart';
 
 enum UserRole { fan, creator }
 
@@ -49,27 +51,33 @@ final roleProvider = NotifierProvider<RoleController, UserRole>(
 );
 
 class _Tab {
-  const _Tab(this.label, this.path, this.icon);
+  const _Tab(this.label, this.path, this.icon, this.selectedIcon);
   final String label;
   final String path;
   final IconData icon;
+  final IconData selectedIcon;
 }
 
-const _profileTab = _Tab('Profile', '/profile', Icons.person_outline);
+const _profileTab = _Tab(
+  'Profile',
+  '/profile',
+  Icons.person_outline,
+  Icons.person,
+);
 
 const _fanTabs = [
-  _Tab('Discover', '/discover', Icons.explore_outlined),
-  _Tab('Following', '/following', Icons.favorite_outline),
-  _Tab('Live', '/live', Icons.live_tv_outlined),
-  _Tab('Inbox', '/inbox', Icons.mail_outline),
+  _Tab('Discover', '/discover', Icons.explore_outlined, Icons.explore),
+  _Tab('Following', '/following', Icons.favorite_outline, Icons.favorite),
+  _Tab('Live', '/live', Icons.live_tv_outlined, Icons.live_tv),
+  _Tab('Inbox', '/inbox', Icons.mail_outline, Icons.mail),
   _profileTab,
 ];
 
 const _creatorTabs = [
-  _Tab('Home', '/home', Icons.dashboard_outlined),
-  _Tab('Studio', '/studio', Icons.video_library_outlined),
-  _Tab('Go live', '/go-live', Icons.videocam_outlined),
-  _Tab('Messages', '/messages', Icons.chat_bubble_outline),
+  _Tab('Home', '/home', Icons.dashboard_outlined, Icons.dashboard),
+  _Tab('Studio', '/studio', Icons.video_library_outlined, Icons.video_library),
+  _Tab('Go live', '/go-live', Icons.videocam_outlined, Icons.videocam),
+  _Tab('Messages', '/messages', Icons.chat_bubble_outline, Icons.chat_bubble),
   _profileTab,
 ];
 
@@ -85,6 +93,10 @@ final _tabScreens = <String, Widget Function()>{
   '/live': LiveNowScreen.new,
   '/go-live': GoLiveScreen.new,
 };
+
+/// Tabs whose screens pad their own scroll content for the frosted tab bar;
+/// the rest are kept above it until they are revamped.
+const _edgeToEdge = {'/discover', '/following'};
 
 /// Rebuilt when the role changes, which swaps the bottom-nav shell. Lock and
 /// disguise changes only re-run the redirect (see [lockRedirect]).
@@ -130,9 +142,19 @@ final routerProvider = Provider<GoRouter>((ref) {
               routes: [
                 GoRoute(
                   path: tab.path,
-                  builder: (_, _) =>
-                      _tabScreens[tab.path]?.call() ??
-                      PlaceholderScreen(title: tab.label),
+                  builder: (_, _) {
+                    final screen =
+                        _tabScreens[tab.path]?.call() ??
+                        PlaceholderScreen(title: tab.label);
+                    return _edgeToEdge.contains(tab.path)
+                        ? screen
+                        : SafeArea(
+                            top: false,
+                            left: false,
+                            right: false,
+                            child: screen,
+                          );
+                  },
                 ),
               ],
             ),
@@ -140,8 +162,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/c/:handle',
-        builder: (_, state) =>
-            CreatorPage(handle: state.pathParameters['handle']!),
+        builder: (_, state) => CreatorPage(
+          handle: state.pathParameters['handle']!,
+          heroTag: state.extra is String ? state.extra! as String : null,
+        ),
       ),
       GoRoute(
         path: '/p/:id',
@@ -219,18 +243,31 @@ class _Shell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Content scrolls under the frosted bar.
+      extendBody: true,
       body: shell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: shell.currentIndex,
-        onDestinationSelected: (i) {
-          // A toast from one tab shouldn't float over the next tab's controls.
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          shell.goBranch(i, initialLocation: i == shell.currentIndex);
-        },
-        destinations: [
-          for (final tab in tabs)
-            NavigationDestination(icon: Icon(tab.icon), label: tab.label),
-        ],
+      bottomNavigationBar: Glass(
+        color: Colors.transparent,
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+        child: NavigationBar(
+          selectedIndex: shell.currentIndex,
+          onDestinationSelected: (i) {
+            if (i != shell.currentIndex) HapticFeedback.selectionClick();
+            // A toast from one tab shouldn't float over the next tab's controls.
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            shell.goBranch(i, initialLocation: i == shell.currentIndex);
+          },
+          destinations: [
+            for (final tab in tabs)
+              NavigationDestination(
+                icon: Icon(tab.icon),
+                selectedIcon: Icon(tab.selectedIcon),
+                label: tab.label,
+              ),
+          ],
+        ),
       ),
     );
   }
