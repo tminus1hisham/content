@@ -122,10 +122,10 @@ Discover exercises a header, search, filters, a list, all states, navigation and
 
 | # | Area | File(s) | Key changes | Status |
 |---|------|---------|-------------|--------|
-| 1 | Profile + settings | `profile/profile_screen.dart`, `settings/*.dart` | Avatar header with glow, grouped cards on new surfaces, accent picker with gradient swatches | ☐ |
-| 2 | Inbox + chat | `messages/messages_screens.dart` | `CreatorAvatar` rows, unread dot, bubbles on brand tones, composer pill with blur | ☐ |
-| 3 | Live | `live/live_screens.dart` | Live cards with a gradient ring; the "LIVE" badge pulses for at most 3 cycles (no endless animation, because of `pumpAndSettle`); room chat overlay with blur | ☐ |
-| 4 | Commerce | `commerce/commerce_screens.dart` | Checkout summary card, `BrandButton` Pay, M-Pesa status steps animated, earnings figures tabular | ☐ |
+| 1 | Profile + settings | `profile/profile_screen.dart`, `settings/*.dart` | Avatar header with glow, grouped cards on new surfaces, accent picker with gradient swatches | ☑ |
+| 2 | Inbox + chat | `messages/messages_screens.dart` | `CreatorAvatar` rows, unread dot, bubbles on brand tones, composer pill with blur | ☑ |
+| 3 | Live | `live/live_screens.dart` | Live cards with a gradient ring; the "LIVE" badge pulses for at most 3 cycles (no endless animation, because of `pumpAndSettle`); room chat overlay with blur | ☑ |
+| 4 | Commerce | `commerce/commerce_screens.dart` | Checkout summary card, `BrandButton` Pay, M-Pesa status steps animated, earnings figures tabular | ☑ |
 | 5 | Creator home + studio | `content/studio_screens.dart`, `app/schedule_picker.dart` | Stat cards, post grid, composer access selector as pills | ☐ |
 | 6 | Onboarding | `onboarding/onboarding_screens.dart` | Step progress with gradient track, cards per step | ☐ |
 | 7 | Auth | `auth/auth_screens.dart`, `app/birth_date_picker.dart` | Welcome on `GlowBackground` + hero logo, `BrandButton`, OTP cells | ☐ |
@@ -162,8 +162,10 @@ Execution:
 - [x] Phase 0: rebrand committed on develop (`b6dd3cf`), branch `ui-revamp`
 - [x] Foundations: `theme.dart`, `motion.dart`, `ui.dart`, shell
 - [x] Pilot: Discover, Following, Creator page, Post detail, LockedMedia. `flutter analyze` clean, 104/104 tests, screenshots at 390 (dark/light) and 1280
-- [ ] Checkpoint approval
-- [ ] Rollout rows 1–8
+- [x] Checkpoint approval (approve, commit per page)
+- [x] Rows 1–4 merged (profile/settings, inbox/chat, live, commerce): analyze clean, 104/104 on the merged branch
+- [ ] Rows 5–8 (studio, onboarding, auth, lock)
+- [ ] Consistency sweep: commerce icon tiles use `primaryContainer` (muddy maroon); match settings' `surfaceContainerHighest` + `primary` icon
 
 ## Learned in the pilot (apply to every row)
 - **Tab screens and the frosted bar.** The shell uses `extendBody`, so a tab screen must add `MediaQuery.paddingOf(context).bottom` to its scroll padding. Until it does, list its path outside `_edgeToEdge` in `router.dart` (it gets a `SafeArea`). Add each revamped tab path to `_edgeToEdge`, and delete the set once all are in.
@@ -177,3 +179,7 @@ Execution:
   - CTA text is `brandInk`: white fails contrast on the orange stop.
 - **Hero tags.** Discover and Following both stay mounted, so hero tags are prefixed per list, and the tag travels as go_router `extra`.
 - **Screenshot harness.** A throwaway widget test (fonts loaded, images precached, layer `toImage`) lives in the session scratchpad. It is not in the repo.
+
+## Found, not fixed
+- A payment that ends `reversed` stops polling but has no view of its own, so checkout keeps showing the "Check your phone" waiting state with an endless progress bar (`commerce_screens.dart`). Fixing it needs new copy.
+- `PostTile` puts its InkWell above the media, so tests tapping the "Unlock for …" label log "would not hit test" warnings (they still pass). A fix (InkWell wrapping the media) is parked as a patch pending the user's go-ahead.
