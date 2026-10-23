@@ -192,6 +192,25 @@ void main() {
     expect(find.text('Paid · KSh 100'), findsOneWidget);
   });
 
+  testWidgets('an unlocked chat photo has a description', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await pumpApp(
+      tester,
+      signedInAs: 'creator@demo.ke',
+      prefs: {roleKey: 'creator'},
+    );
+    await _tap(
+      tester,
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Messages'),
+      ),
+    );
+    await _tap(tester, find.text('Fan U1'));
+    expect(find.bySemanticsLabel('Photo'), findsOneWidget);
+    semantics.dispose();
+  });
+
   testWidgets('a paid photo cannot be sent without a price', (tester) async {
     ImagePickerPlatform.instance = _FakePicker();
     await pumpApp(

@@ -10,9 +10,17 @@ import 'fake_content.dart';
 /// Shows a media item through its short-lived access URL. Never used for
 /// locked posts: those show [LockedMedia] and request nothing.
 class MediaView extends ConsumerWidget {
-  const MediaView({super.key, required this.mediaId, this.fit = BoxFit.cover});
+  const MediaView({
+    super.key,
+    required this.mediaId,
+    this.fit = BoxFit.cover,
+    this.semanticLabel,
+  });
   final String mediaId;
   final BoxFit fit;
+
+  /// Read by screen readers for images; null leaves the image undescribed.
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,15 +42,19 @@ class MediaView extends ConsumerWidget {
               : const _VideoPlaceholder();
         }
         if (url.startsWith('asset://')) {
-          return Image.asset(url.substring('asset://'.length), fit: fit);
+          return Image.asset(
+            url.substring('asset://'.length),
+            fit: fit,
+            semanticLabel: semanticLabel,
+          );
         }
         if (url.startsWith('fake-media://')) {
           final bytes = fakeContentDb.media[mediaId]?.bytes;
           return bytes == null
               ? const SizedBox.shrink()
-              : Image.memory(bytes, fit: fit);
+              : Image.memory(bytes, fit: fit, semanticLabel: semanticLabel);
         }
-        return Image.network(url, fit: fit);
+        return Image.network(url, fit: fit, semanticLabel: semanticLabel);
       },
     );
   }
