@@ -26,6 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Used when you go live or add photos and videos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Used for sound when you go live.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Used to choose photos and videos to post.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Unlock the app with Face ID.</string>
 	<key>UIApplicationSceneManifest</key>

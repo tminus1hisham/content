@@ -114,3 +114,24 @@ Subscriptions are started through `POST /orders` with `type: subscription`, not 
 | `POST /reports` | `{targetType: user\|post\|message, targetId, reason: minor\|non_consensual\|harassment\|impersonation\|scam\|other, details}` | `201 {caseId, priority: urgent\|normal, status}`. `minor` and `non_consensual` are **urgent** (FR-SAF-003) |
 
 The app polls the open thread every 5 s. Tell us if you add a realtime transport (WebSocket or SSE).
+
+## Livestreaming (new; not in IT.md §9)
+
+The app uses **LiveKit** for video. The Spring API issues LiveKit access tokens (using the LiveKit server SDK) and is the only place access is decided.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/live/now` | Live sessions: `[{id, creator, title, access: free\|subscribers\|ticketed, priceCents, record, status, startedAt, slowModeSeconds, hasAccess, removed}]` |
+| GET | `/live/sessions/{id}` | One session, same shape |
+| POST | `/live/sessions` | Start a stream. Body `{title, access, priceCents?, record, safetyConfirmed: true}`. Errors: `403 CREATOR_NOT_APPROVED`, `400 TITLE_REQUIRED`, `400 PRICE_OUT_OF_RANGE`, `400 SAFETY_CHECK_REQUIRED` |
+| POST | `/live/sessions/{id}/token` | `{url, token, room, identity, name, canPublish}`. `canPublish` is true only for the creator. Errors: `403 LIVE_ACCESS_DENIED` (no ticket or subscription), `403 REMOVED_FROM_LIVE`, `410 LIVE_ENDED` |
+| POST | `/live/sessions/{id}/end` | Creator only. Returns `{durationSeconds, tipsCents, ticketsSold, ticketRevenueCents}` and closes the LiveKit room |
+| POST | `/live/sessions/{id}/moderation` | Creator only. `{action: mute\|unmute\|remove\|slow_mode, identity?, seconds?}`. Also update the participant's LiveKit permissions (mute → `canPublishData: false`, remove → `RemoveParticipant`) |
+
+Tickets and tips are bought through `POST /orders`:
+- **Ticket:** `{type: "ticket", itemId: <sessionId>}`.
+- **Tip:** `{type: "tip", itemId: <sessionId>, amountCents}`, where the fan chooses the amount (KSh 10 to 50,000).
+
+When a tip payment succeeds, **the server** sends a LiveKit data message on topic `tip` with `{name, amountCents}`. The app only believes tip, slow-mode and moderation messages that come from the server, and pin messages that come from the creator's identity. Data topics are `chat` `{text}`, `pin` `{text}`, `tip` and `moderation` `{slowModeSeconds?, muted?, removed?}`.
+
+Without `--dart-define=LIVEKIT_URL=…` the app runs the room in demo mode, with no real video and chat that stays on the device.

@@ -24,11 +24,19 @@ String _date(BuildContext context, String iso) => MaterialLocalizations.of(
 /// IT.md F6 + F7. The server prices the order; access is granted only when
 /// the server reports the payment `succeeded`, never from this screen.
 class CheckoutScreen extends ConsumerStatefulWidget {
-  const CheckoutScreen({super.key, required this.type, required this.itemId});
+  const CheckoutScreen({
+    super.key,
+    required this.type,
+    required this.itemId,
+    this.amountCents,
+  });
 
-  /// post | subscription
+  /// post | subscription | message | ticket | tip
   final String type;
   final String itemId;
+
+  /// Only for tips, where the fan chooses the amount.
+  final int? amountCents;
 
   @override
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
@@ -75,6 +83,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             data: {
               'type': widget.type,
               'itemId': widget.itemId,
+              'amountCents': ?widget.amountCents,
               'idempotencyKey': _orderKey,
             },
           );
@@ -226,7 +235,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ],
     );
     final done = FilledButton(
-      onPressed: () => context.pop(),
+      onPressed: () => context.pop(_status == 'succeeded'),
       child: const Text('Done'),
     );
     final retry = OutlinedButton(
@@ -237,9 +246,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       'succeeded' => state(
         Icons.check_circle_outline,
         'Payment received',
-        order['type'] == 'post'
-            ? 'The post is unlocked. Your receipt is in My library.'
-            : 'Your subscription is active. Your receipt is in My library.',
+        switch (order['type']) {
+          'post' => 'The post is unlocked. Your receipt is in My library.',
+          'subscription' =>
+            'Your subscription is active. Your receipt is in My library.',
+          'ticket' => 'You have a ticket. Enjoy the stream!',
+          'tip' => 'Your tip was sent. Thank you!',
+          _ => 'Unlocked. Your receipt is in My library.',
+        },
         [done],
       ),
       'failed' => state(

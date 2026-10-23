@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../core/fake_backend.dart';
 import '../auth/fake_auth.dart';
 import '../content/fake_content.dart';
+import '../live/fake_live.dart';
 import '../messages/fake_messaging.dart';
 import '../onboarding/fake_onboarding.dart';
 
@@ -226,7 +227,11 @@ class FakeCommerceDb {
       _Tx(
         't-${order.id}',
         order.creatorId,
-        order.type == 'subscription' ? 'subscription' : 'sale',
+        switch (order.type) {
+          'subscription' => 'subscription',
+          'tip' => 'tip',
+          _ => 'sale',
+        },
         order.description,
         order.amountCents,
         commissionOf(order.amountCents),
@@ -238,6 +243,10 @@ class FakeCommerceDb {
       fakeContentDb.grantPurchase(order.fanId, order.itemId);
     } else if (order.type == 'message') {
       fakeMessagingDb.unlock(order.fanId, order.itemId);
+    } else if (order.type == 'ticket') {
+      fakeLiveDb.grantTicket(order.fanId, order.itemId);
+    } else if (order.type == 'tip') {
+      fakeLiveDb.recordTip(order.itemId, order.amountCents);
     } else {
       final existing = _subscriptions.values.where(
         (s) => s.fanId == order.fanId && s.creatorId == order.creatorId,
@@ -364,6 +373,32 @@ class FakeCommerceDb {
         amount = post.priceCents;
         final handle = fakeContentDb.creatorProfile(creatorId)?['handle'];
         description = 'Post by @$handle';
+      } else if (type == 'ticket') {
+        final ticket = fakeLiveDb.ticketFor(itemId);
+        if (ticket == null) {
+          return _error(400, 'NOT_PURCHASABLE', 'This stream has no tickets');
+        }
+        creatorId = ticket.creatorId;
+        amount = ticket.priceCents;
+        final handle = fakeContentDb.creatorProfile(creatorId)?['handle'];
+        description = 'Live ticket for @$handle';
+      } else if (type == 'tip') {
+        final creator = fakeLiveDb.creatorOf(itemId);
+        final tip = body['amountCents'] as int?;
+        if (creator == null) {
+          return _error(400, 'NOT_PURCHASABLE', 'This stream has ended');
+        }
+        if (tip == null || tip < minPriceCents || tip > maxPriceCents) {
+          return _error(
+            400,
+            'PRICE_OUT_OF_RANGE',
+            'Tips must be between KSh 10 and KSh 50,000',
+          );
+        }
+        creatorId = creator;
+        amount = tip;
+        final handle = fakeContentDb.creatorProfile(creatorId)?['handle'];
+        description = 'Live tip for @$handle';
       } else if (type == 'message') {
         final message = fakeMessagingDb.paidMessage(itemId, userId);
         if (message == null) {

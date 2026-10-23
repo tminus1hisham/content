@@ -45,6 +45,7 @@ dependencies:
   local_auth: ^3.0.2
   image_picker: ^1.2.4
   video_player: ^2.11.1
+  livekit_client: ^2.13.1
 
 dev_dependencies:
   flutter_test:

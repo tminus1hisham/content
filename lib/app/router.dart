@@ -10,6 +10,7 @@ import '../features/disguise/lock_gate.dart';
 import '../features/commerce/commerce_screens.dart';
 import '../features/content/discover_screens.dart';
 import '../features/content/studio_screens.dart';
+import '../features/live/live_screens.dart';
 import '../features/messages/messages_screens.dart';
 import '../features/onboarding/onboarding_screens.dart';
 import '../features/profile/profile_screen.dart';
@@ -80,6 +81,8 @@ final _tabScreens = <String, Widget Function()>{
   '/studio': StudioScreen.new,
   '/inbox': InboxScreen.new,
   '/messages': InboxScreen.new,
+  '/live': LiveNowScreen.new,
+  '/go-live': GoLiveScreen.new,
 };
 
 /// Rebuilt when the role changes, which swaps the bottom-nav shell. Lock and
@@ -150,9 +153,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) => CheckoutScreen(
           type: state.pathParameters['type']!,
           itemId: state.pathParameters['id']!,
+          amountCents: int.tryParse(state.uri.queryParameters['amount'] ?? ''),
         ),
       ),
       GoRoute(path: '/library', builder: (_, _) => const LibraryScreen()),
+      GoRoute(
+        path: '/live/:id',
+        builder: (_, state) => LiveRoomScreen(id: state.pathParameters['id']!),
+      ),
       GoRoute(
         path: '/chat/:id',
         builder: (_, state) => ChatScreen(id: state.pathParameters['id']!),
