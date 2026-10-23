@@ -96,7 +96,7 @@ final _tabScreens = <String, Widget Function()>{
 
 /// Tabs whose screens pad their own scroll content for the frosted tab bar;
 /// the rest are kept above it until they are revamped.
-const _edgeToEdge = {'/discover', '/following', '/profile'};
+const _edgeToEdge = {'/discover', '/following', '/profile', '/home', '/studio'};
 
 /// Rebuilt when the role changes, which swaps the bottom-nav shell. Lock and
 /// disguise changes only re-run the redirect (see [lockRedirect]).
