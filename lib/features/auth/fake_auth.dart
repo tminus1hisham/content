@@ -155,7 +155,7 @@ class FakeAuthDb {
       _users.putIfAbsent(
         identifier,
         () => _User(
-          'u${_users.length + 1}',
+          'u-${++_seq}', // can't collide with the seeded u1..u5
           identifier,
           body['password'] as String,
           [],

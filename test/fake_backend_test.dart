@@ -23,6 +23,32 @@ void main() {
     expect((error?.response?.data as Map)['code'], 'NOT_FOUND');
   });
 
+  test('a new sign-up is its own user, not a seeded one', () async {
+    final verificationId = (await dio.post<Map>(
+      '/auth/register',
+      data: {
+        'identifier': 'qa1@test.ke',
+        'password': 'longenough',
+        'country': 'KE',
+      },
+    )).data!['verificationId'];
+    await dio.post<Object?>(
+      '/auth/verify-contact',
+      data: {'verificationId': verificationId, 'code': '123456'},
+    );
+    final login = await dio.post<Map>(
+      '/auth/login',
+      data: {'identifier': 'qa1@test.ke', 'password': 'longenough'},
+    );
+    final me = await dio.get<Map>(
+      '/users/me',
+      options: Options(
+        headers: {'Authorization': 'Bearer ${login.data!['accessToken']}'},
+      ),
+    );
+    expect(me.data!['identifier'], 'qa1@test.ke');
+  });
+
   test('path params are matched by segment', () async {
     fakeRoutes['GET /things/{id}'] = (_, params) => (200, {'id': params['id']});
     addTearDown(() => fakeRoutes.remove('GET /things/{id}'));
