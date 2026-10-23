@@ -101,12 +101,13 @@ const _outcomes = {
   'failed',
   'cancelled',
   'expired',
+  'reversed',
   'under_review',
   'still_waiting',
 };
 
-/// Outcomes where M-Pesa took no money.
-const _notCharged = {'failed', 'cancelled', 'expired'};
+/// Outcomes where the payment did not go through (shown as a failed step).
+const _unsuccessful = {'failed', 'cancelled', 'expired', 'reversed'};
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   static const pollEvery = Duration(seconds: 2);
@@ -209,7 +210,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       });
       if (terminalPaymentStates.contains(status)) {
         _timer?.cancel();
-        if (status == 'succeeded') _refreshAccess();
+        // A reversal can withdraw access granted earlier, so refresh then too.
+        if (status == 'succeeded' || status == 'reversed') _refreshAccess();
       }
     } catch (_) {
       // Offline for a moment: keep polling; the server state is unchanged.
@@ -317,7 +319,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget _result(Json order) {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final failed = _notCharged.contains(_status);
+    final failed = _unsuccessful.contains(_status);
     final (badge, onBadge) = _status == 'succeeded'
         ? (scheme.primary.withValues(alpha: 0.14), scheme.primary)
         : failed
@@ -401,6 +403,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         Icons.timer_off_outlined,
         'Payment expired',
         'The M-Pesa prompt timed out. You were not charged.',
+        [retry],
+      ),
+      'reversed' => state(
+        Icons.undo_rounded,
+        'Payment reversed',
+        'M-Pesa reversed this payment, so nothing was unlocked. Any money '
+            'taken goes back to your M-Pesa account.',
         [retry],
       ),
       'under_review' => state(
@@ -516,7 +525,7 @@ class _PaymentSteps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final failed = _notCharged.contains(status);
+    final failed = _unsuccessful.contains(status);
     final steps = <(String, _Step)>[
       ('Prompt sent', _Step.done),
       if (failed)

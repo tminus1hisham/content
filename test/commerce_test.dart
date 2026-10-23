@@ -213,6 +213,27 @@ void main() {
     expect(find.byType(LockedMedia), findsOneWidget);
   });
 
+  testWidgets('a reversed payment says so and keeps the post locked', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await _tap(tester, find.text('Amani'));
+    await _tap(tester, find.text('Unlock for KSh 150'));
+    await _tap(tester, find.byKey(const ValueKey('unlock')));
+    await tester.enterText(
+      find.byKey(const ValueKey('checkout-phone')),
+      '0712 345 888',
+    );
+    await _tap(tester, find.byKey(const ValueKey('checkout-pay')));
+    await _waitForPayment(tester);
+
+    expect(find.text('Payment reversed'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(LockedMedia), findsOneWidget);
+  });
+
   testWidgets('creator requests a payout from available earnings', (
     tester,
   ) async {

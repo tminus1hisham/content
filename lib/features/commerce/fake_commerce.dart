@@ -573,6 +573,9 @@ class FakeCommerceDb {
           providerCallback(p.id, success: false, reason: 'insufficient_funds');
         } else if (p.phone.endsWith('999')) {
           providerCallback(p.id, success: false, reason: 'cancelled');
+        } else if (p.phone.endsWith('888')) {
+          // M-Pesa reversed the payment before it settled: nothing is granted.
+          p.status = 'reversed';
         } else {
           providerCallback(p.id, success: true);
         }
