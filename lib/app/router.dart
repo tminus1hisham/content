@@ -102,6 +102,8 @@ const _edgeToEdge = {
   '/profile',
   '/inbox',
   '/messages',
+  '/live',
+  '/go-live',
 };
 
 /// Rebuilt when the role changes, which swaps the bottom-nav shell. Lock and
