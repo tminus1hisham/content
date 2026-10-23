@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/theme.dart';
 import '../../core/api_client.dart';
 import '../../core/money.dart';
 import '../auth/auth_controller.dart';
@@ -20,6 +21,28 @@ void _snack(BuildContext context, String text) =>
 String _date(BuildContext context, String iso) => MaterialLocalizations.of(
   context,
 ).formatMediumDate(DateTime.parse(iso).toLocal());
+
+const _tabular = [FontFeature.tabularFigures()];
+
+/// Rounded-square tonal icon used as the leading element of money rows.
+class _TonalIcon extends StatelessWidget {
+  const _TonalIcon(this.icon);
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(controlRadius),
+      ),
+      child: Icon(icon, color: scheme.onSecondaryContainer),
+    );
+  }
+}
 
 /// IT.md F6 + F7. The server prices the order; access is granted only when
 /// the server reports the payment `succeeded`, never from this screen.
@@ -190,7 +213,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     Text('Pay with', style: Theme.of(context).textTheme.titleMedium),
     const Card(
       child: ListTile(
-        leading: Icon(Icons.phone_android),
+        leading: _TonalIcon(Icons.phone_android),
         title: Text('M-Pesa'),
         subtitle: Text('You will get a prompt on your phone'),
         trailing: Icon(Icons.check_circle),
@@ -313,14 +336,19 @@ class _OrderSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
     Widget row(String label, String value, {bool bold = false}) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Expanded(child: Text(label)),
+          Expanded(
+            child: Text(label, style: bold ? text.titleLarge : text.bodyLarge),
+          ),
           Text(
             value,
-            style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
+            style: bold
+                ? text.titleLarge?.copyWith(fontFeatures: _tabular)
+                : text.bodyLarge?.copyWith(fontFeatures: _tabular),
           ),
         ],
       ),
@@ -338,7 +366,7 @@ class _OrderSummary extends StatelessWidget {
             const SizedBox(height: 8),
             row('Price', formatKes(order['amountCents'] as int)),
             row('Fees', formatKes(order['feesCents'] as int)),
-            const Divider(),
+            const Divider(height: 24),
             row('Total', formatKes(order['totalCents'] as int), bold: true),
             const SizedBox(height: 8),
             Text(
@@ -452,7 +480,11 @@ class LibraryScreen extends ConsumerWidget {
                       children: [
                         for (final o in orders)
                           ListTile(
-                            leading: Icon(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            leading: _TonalIcon(
                               o['type'] == 'post'
                                   ? Icons.lock_open
                                   : Icons.autorenew,
@@ -490,6 +522,11 @@ class LibraryScreen extends ConsumerWidget {
                       children: [
                         for (final s in subs)
                           ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 4,
+                            ),
+                            leading: const _TonalIcon(Icons.star_outline),
                             title: Text('@${(s['creator'] as Json)['handle']}'),
                             subtitle: Text(
                               '${formatKes(s['priceCents'] as int)}/month · '
@@ -530,7 +567,10 @@ class EarningsScreen extends ConsumerWidget {
           Widget bucket(String label, String key) => Expanded(
             child: Column(
               children: [
-                Text(formatKes(e[key] as int), style: text.titleMedium),
+                Text(
+                  formatKes(e[key] as int),
+                  style: text.titleMedium?.copyWith(fontFeatures: _tabular),
+                ),
                 Text(label, style: text.bodySmall),
               ],
             ),
@@ -548,15 +588,23 @@ class EarningsScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               children: [
                 Card(
+                  color: Theme.of(context).colorScheme.primaryContainer,
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
-                        Text('Available', style: text.bodyMedium),
-                        Text(
-                          formatKes(e['availableCents'] as int),
-                          key: const ValueKey('earnings-available'),
-                          style: text.displaySmall,
+                        Text('Available', style: text.labelLarge),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            formatKes(e['availableCents'] as int),
+                            key: const ValueKey('earnings-available'),
+                            style: text.displaySmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: _tabular,
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 12),
                         Row(
@@ -614,8 +662,13 @@ class _PayoutHistory extends ConsumerWidget {
         for (final p in payouts)
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.outbox),
-            title: Text(formatKes(p['amountCents'] as int)),
+            leading: const _TonalIcon(Icons.outbox),
+            title: Text(
+              formatKes(p['amountCents'] as int),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontFeatures: _tabular),
+            ),
             subtitle: Text(
               '${p['destination']} · ${_date(context, p['createdAt'] as String)}',
             ),
@@ -648,9 +701,25 @@ class _Transactions extends ConsumerWidget {
         for (final t in txs)
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
+            shape: const Border(),
+            collapsedShape: const Border(),
+            leading: _TonalIcon(
+              (t['netCents'] as int) < 0
+                  ? Icons.arrow_upward
+                  : Icons.arrow_downward,
+            ),
             title: Text(t['description'] as String),
             subtitle: Text(_date(context, t['createdAt'] as String)),
-            trailing: Text(formatKes(t['netCents'] as int)),
+            trailing: Text(
+              ((t['netCents'] as int) < 0 ? '' : '+') +
+                  formatKes(t['netCents'] as int),
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontFeatures: _tabular,
+                color: (t['netCents'] as int) < 0
+                    ? Theme.of(context).colorScheme.onSurface
+                    : Theme.of(context).colorScheme.primary,
+              ),
+            ),
             childrenPadding: const EdgeInsets.only(bottom: 12),
             children: [
               for (final (label, key) in [
@@ -662,7 +731,10 @@ class _Transactions extends ConsumerWidget {
                 Row(
                   children: [
                     Expanded(child: Text(label)),
-                    Text(formatKes(t[key] as int)),
+                    Text(
+                      formatKes(t[key] as int),
+                      style: const TextStyle(fontFeatures: _tabular),
+                    ),
                   ],
                 ),
               Row(
@@ -778,15 +850,34 @@ class _PayoutRequestScreenState extends ConsumerState<PayoutRequestScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Text('Available', style: text.bodyMedium),
-                Text(
-                  formatKes(earnings['availableCents'] as int),
-                  style: text.headlineMedium,
-                ),
-                Text(
-                  'Minimum ${formatKes(earnings['payoutMinimumCents'] as int)}'
-                  ' · maximum ${formatKes(earnings['payoutMaximumCents'] as int)}',
-                  style: text.bodySmall,
+                Card(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Available', style: text.labelLarge),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            formatKes(earnings['availableCents'] as int),
+                            style: text.displaySmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: _tabular,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Minimum ${formatKes(earnings['payoutMinimumCents'] as int)}'
+                          ' · maximum ${formatKes(earnings['payoutMaximumCents'] as int)}',
+                          style: text.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 if (method == null)
@@ -798,7 +889,7 @@ class _PayoutRequestScreenState extends ConsumerState<PayoutRequestScreen> {
                 else ...[
                   Card(
                     child: ListTile(
-                      leading: const Icon(Icons.phone_android),
+                      leading: const _TonalIcon(Icons.phone_android),
                       title: Text('M-Pesa ${method['phoneMasked']}'),
                       subtitle: Text('${method['accountName']}'),
                     ),
