@@ -228,31 +228,48 @@ class _Shell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const radius = BorderRadius.all(Radius.circular(28));
     return Scaffold(
-      // Content scrolls under the frosted bar.
+      // Content scrolls under the floating frosted bar.
       extendBody: true,
       body: shell,
-      bottomNavigationBar: Glass(
-        color: Colors.transparent,
-        border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-        ),
-        child: NavigationBar(
-          selectedIndex: shell.currentIndex,
-          onDestinationSelected: (i) {
-            if (i != shell.currentIndex) HapticFeedback.selectionClick();
-            // A toast from one tab shouldn't float over the next tab's controls.
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            shell.goBranch(i, initialLocation: i == shell.currentIndex);
-          },
-          destinations: [
-            for (final tab in tabs)
-              NavigationDestination(
-                icon: Icon(tab.icon),
-                selectedIcon: Icon(tab.selectedIcon),
-                label: tab.label,
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.14),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
               ),
-          ],
+            ],
+          ),
+          child: Glass(
+            color: Colors.transparent,
+            borderRadius: radius,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+            child: NavigationBar(
+              selectedIndex: shell.currentIndex,
+              onDestinationSelected: (i) {
+                if (i != shell.currentIndex) HapticFeedback.selectionClick();
+                // A toast from one tab shouldn't float over the next tab's controls.
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                shell.goBranch(i, initialLocation: i == shell.currentIndex);
+              },
+              destinations: [
+                for (final tab in tabs)
+                  NavigationDestination(
+                    icon: Icon(tab.icon),
+                    selectedIcon: Icon(tab.selectedIcon),
+                    label: tab.label,
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
