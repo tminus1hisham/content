@@ -5,12 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers.dart';
 
-Future<void> _openAmani(WidgetTester tester) async {
-  await tester.ensureVisible(find.text('Amani'));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('Amani'));
-  await tester.pumpAndSettle();
-}
+Future<void> _openAmani(WidgetTester tester) => openCreator(tester, 'Amani');
 
 void main() {
   testWidgets('a post tile reads its label and taps as one semantics node', (

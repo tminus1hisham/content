@@ -168,7 +168,7 @@ void main() {
 
   testWidgets('fan pays with M-Pesa and the post unlocks', (tester) async {
     await pumpApp(tester);
-    await _tap(tester, find.text('Amani'));
+    await openCreator(tester, 'Amani');
     await _tap(tester, find.text('Unlock for KSh 150'));
     await _tap(tester, find.byKey(const ValueKey('unlock')));
 
@@ -197,7 +197,7 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester);
-    await _tap(tester, find.text('Amani'));
+    await openCreator(tester, 'Amani');
     await _tap(tester, find.byKey(const ValueKey('subscribe')));
     await tester.enterText(
       find.byKey(const ValueKey('checkout-phone')),
@@ -216,7 +216,7 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester);
-    await _tap(tester, find.text('Amani'));
+    await openCreator(tester, 'Amani');
     await _tap(tester, find.text('Unlock for KSh 150'));
     await _tap(tester, find.byKey(const ValueKey('unlock')));
     await tester.enterText(
@@ -236,7 +236,7 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester);
-    await _tap(tester, find.text('Amani'));
+    await openCreator(tester, 'Amani');
     await _tap(tester, find.text('Unlock for KSh 150'));
     await _tap(tester, find.byKey(const ValueKey('unlock')));
     await tester.enterText(

@@ -244,7 +244,7 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester);
-    await _tap(tester, find.text('Zuri Wambui'));
+    await openCreator(tester, 'Zuri Wambui');
     await _tap(tester, find.byKey(const ValueKey('message-creator')));
     expect(find.text('Zuri Wambui'), findsOneWidget); // chat title
 

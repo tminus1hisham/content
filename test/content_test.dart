@@ -215,7 +215,7 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester);
-    await _tap(tester, find.text('Amani'));
+    await openCreator(tester, 'Amani');
     expect(find.text('Unlock for KSh 150'), findsOneWidget);
 
     await _tap(tester, find.text('Unlock for KSh 150'));

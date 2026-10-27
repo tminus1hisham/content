@@ -1,0 +1,68 @@
+import 'package:content/features/content/home_feed.dart';
+import 'package:flutter/gestures.dart' show kDoubleTapMinTime;
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers.dart';
+
+Finder _post(String caption) =>
+    find.byWidgetPredicate((w) => w is FeedPost && w.post.caption == caption);
+
+final _feed = find.byWidgetPredicate(
+  (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+);
+
+/// Scrolls the feed (lazily built) until [finder] is on screen.
+Future<void> _reveal(WidgetTester tester, Finder finder) async {
+  await tester.scrollUntilVisible(finder, 300, scrollable: _feed.first);
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('home shows the stories tray and the feed', (tester) async {
+    await pumpApp(tester);
+    expect(find.byType(StoriesTray), findsOneWidget);
+    expect(find.byType(FeedPost), findsWidgets);
+  });
+
+  testWidgets('double-tapping a post likes it', (tester) async {
+    await pumpApp(tester);
+    final post = _post('New single preview');
+    await _reveal(tester, post);
+    final id = tester.widget<FeedPost>(post).post.id;
+    final before = tester.widget<FeedPost>(post).post.likes;
+    final heart = find.descendant(
+      of: find.byKey(ValueKey('like-$id')),
+      matching: find.byIcon(Icons.favorite),
+    );
+    expect(heart, findsNothing);
+
+    final media = find.descendant(of: post, matching: find.byType(AspectRatio));
+    await tester.tap(media);
+    await tester.pump(kDoubleTapMinTime);
+    await tester.tap(media);
+    await tester.pumpAndSettle();
+
+    expect(heart, findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(ValueKey('likes-$id'))).data,
+      '${before + 1} ${before + 1 == 1 ? 'like' : 'likes'}',
+    );
+  });
+
+  testWidgets('following a suggested creator flips the button', (tester) async {
+    await pumpApp(tester);
+    final follow = find.byKey(const ValueKey('suggest-follow-amani'));
+    await _reveal(tester, follow);
+    expect(
+      find.descendant(of: follow, matching: find.text('Follow')),
+      findsOneWidget,
+    );
+    await tester.tap(follow);
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: follow, matching: find.text('Following')),
+      findsOneWidget,
+    );
+  });
+}

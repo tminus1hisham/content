@@ -110,7 +110,10 @@ void main() {
           ),
         );
       }
-      await _tap(tester, find.text('Amani'));
+      await openCreator(tester, 'Amani');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      // Back from the creator lands on search, which covers the nav bar.
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _openPrivacy(tester);

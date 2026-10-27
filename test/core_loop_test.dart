@@ -77,7 +77,7 @@ void main() {
     expect(_tab('Discover'), findsOneWidget);
 
     // The fan finds it locked, pays, and it unlocks.
-    await _tap(tester, find.text('Amani'));
+    await openCreator(tester, 'Amani');
     await _tap(tester, find.text('Unlock for KSh 300'));
     expect(find.byType(MediaView), findsNothing);
     await _tap(tester, find.byKey(const ValueKey('unlock')));
