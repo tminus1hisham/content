@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/api_client.dart';
+import '../auth/auth_controller.dart';
 
 class Creator {
   const Creator({
@@ -216,9 +217,14 @@ Future<({int likes, bool liked})> setLiked(
 }
 
 /// Optimistic like state by post id, shared by the feed and the story viewer
-/// so it survives a post scrolling away. Cleared when the feed is refreshed.
+/// so it survives a post scrolling away. Cleared when the feed is refreshed
+/// or the signed-in account changes.
 final likeOverridesProvider =
-    StateProvider<Map<String, ({int likes, bool liked})>>((_) => {});
+    StateProvider<Map<String, ({int likes, bool liked})>>((ref) {
+      // Another account on this device must not inherit these hearts.
+      ref.watch(authProvider.select((a) => a.user?.id));
+      return {};
+    });
 
 /// Latest like request per post: only that one may touch the shown state.
 final _likeSeq = <String, int>{};
