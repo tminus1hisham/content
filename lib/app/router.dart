@@ -10,6 +10,7 @@ import '../features/disguise/disguise_controller.dart';
 import '../features/disguise/lock_gate.dart';
 import '../features/commerce/commerce_screens.dart';
 import '../features/content/discover_screens.dart';
+import '../features/content/home_feed.dart';
 import '../features/content/studio_screens.dart';
 import '../features/live/live_screens.dart';
 import '../features/messages/messages_screens.dart';
@@ -153,6 +154,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           heroTag: state.extra is String ? state.extra! as String : null,
         ),
       ),
+      GoRoute(path: '/search', builder: (_, _) => const CreatorSearchScreen()),
       GoRoute(
         path: '/p/:id',
         builder: (_, state) =>
@@ -221,13 +223,13 @@ final routerProvider = Provider<GoRouter>((ref) {
   return router;
 });
 
-class _Shell extends StatelessWidget {
+class _Shell extends ConsumerWidget {
   const _Shell({required this.shell, required this.tabs});
   final StatefulNavigationShell shell;
   final List<_Tab> tabs;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     const radius = BorderRadius.all(Radius.circular(28));
     return Scaffold(
       // Content scrolls under the floating frosted bar.
@@ -256,6 +258,10 @@ class _Shell extends StatelessWidget {
               selectedIndex: shell.currentIndex,
               onDestinationSelected: (i) {
                 if (i != shell.currentIndex) HapticFeedback.selectionClick();
+                // Re-tapping the home tab scrolls the feed back to the top.
+                if (i == 0 && i == shell.currentIndex) {
+                  ref.read(homeScrollTopProvider.notifier).state++;
+                }
                 // A toast from one tab shouldn't float over the next tab's controls.
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
                 shell.goBranch(i, initialLocation: i == shell.currentIndex);

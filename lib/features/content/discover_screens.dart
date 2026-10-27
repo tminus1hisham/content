@@ -34,15 +34,16 @@ Widget asyncBody<T>(
 double _gutter(BuildContext context, [double maxWidth = 640]) =>
     math.max(16, (MediaQuery.sizeOf(context).width - maxWidth) / 2);
 
-/// IT.md F3.
-class DiscoverScreen extends ConsumerStatefulWidget {
-  const DiscoverScreen({super.key});
+/// IT.md F3: creator search, opened from the home top bar.
+class CreatorSearchScreen extends ConsumerStatefulWidget {
+  const CreatorSearchScreen({super.key});
 
   @override
-  ConsumerState<DiscoverScreen> createState() => _DiscoverScreenState();
+  ConsumerState<CreatorSearchScreen> createState() =>
+      _CreatorSearchScreenState();
 }
 
-class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
+class _CreatorSearchScreenState extends ConsumerState<CreatorSearchScreen> {
   String _query = '';
   String? _category;
 
@@ -141,6 +142,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             leading: header,
           );
     return Scaffold(
+      appBar: AppBar(),
       // Ambient light behind everything; the feed scrolls over it.
       body: Stack(
         children: [
