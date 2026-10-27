@@ -89,7 +89,6 @@ class _StoryViewerState extends ConsumerState<StoryViewer>
 
   /// Segment each creator page is on, so going back resumes where it was.
   final _segment = <int, int>{};
-  final _liked = <String, bool>{};
 
   late final _progress =
       AnimationController(vsync: this, duration: _segmentDuration)
@@ -145,7 +144,7 @@ class _StoryViewerState extends ConsumerState<StoryViewer>
     if (_closing || !mounted) return;
     _closing = true;
     _progress.stop();
-    context.pop();
+    context.canPop() ? context.pop() : context.go('/discover');
   }
 
   void _next() {
@@ -220,22 +219,21 @@ class _StoryViewerState extends ConsumerState<StoryViewer>
     _resume();
   }
 
-  Future<void> _like(Post post) async {
-    final was = _liked[post.id] ?? post.liked;
+  Future<void> _like(Post post, bool was) async {
     final like = !was;
     like ? HapticFeedback.lightImpact() : HapticFeedback.selectionClick();
-    setState(() => _liked[post.id] = like);
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      final r = await setLiked(ref.read(dioProvider), post.id, like);
-      if (!mounted) return;
-      setState(() => _liked[post.id] = r.liked);
-      ref.invalidate(feedProvider);
+      await toggleLike(
+        ref.read(dioProvider),
+        ref.read(likeOverridesProvider.notifier),
+        post,
+        like,
+      );
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _liked[post.id] = was);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      }
     }
   }
 
@@ -273,6 +271,9 @@ class _StoryViewerState extends ConsumerState<StoryViewer>
   @override
   Widget build(BuildContext context) {
     if (!_load()) {
+      if (ref.watch(feedProvider).hasError) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _close());
+      }
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(child: CircularProgressIndicator()),
@@ -347,7 +348,9 @@ class _StoryViewerState extends ConsumerState<StoryViewer>
     final s = _stories![i];
     final seg = (_segment[i] ?? 0).clamp(0, s.posts.length - 1);
     final post = s.posts[seg];
-    final liked = _liked[post.id] ?? post.liked;
+    final liked =
+        ref.watch(likeOverridesProvider.select((m) => m[post.id]))?.liked ??
+        post.liked;
     final manual = _manual;
     final created = post.createdAt;
     const white = Colors.white;
@@ -444,11 +447,15 @@ class _StoryViewerState extends ConsumerState<StoryViewer>
                                       color: white,
                                     ),
                                     SizedBox(width: 8),
-                                    Text(
-                                      'View post',
-                                      style: TextStyle(
-                                        color: white,
-                                        fontWeight: FontWeight.w600,
+                                    Flexible(
+                                      child: Text(
+                                        'View post',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -467,7 +474,7 @@ class _StoryViewerState extends ConsumerState<StoryViewer>
                       child: IconButton(
                         key: const ValueKey('story-like'),
                         tooltip: liked ? 'Unlike' : 'Like',
-                        onPressed: () => _like(post),
+                        onPressed: () => _like(post, liked),
                         icon: Icon(
                           liked ? Icons.favorite : Icons.favorite_border,
                           color: liked ? Brand.of(context).glowB : white,

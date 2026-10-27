@@ -111,7 +111,10 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     setState(() => _refreshes++);
     ref.invalidate(liveNowProvider);
     ref.invalidate(discoveryProvider);
-    return ref.refresh(feedProvider.future);
+    // Fresh server data is authoritative: drop the optimistic overrides.
+    return ref.refresh(feedProvider.future).whenComplete(() {
+      ref.read(likeOverridesProvider.notifier).state = {};
+    });
   }
 
   @override
@@ -181,7 +184,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
         Entrance(
           key: ValueKey(p.id),
           index: i,
-          child: FeedPost(post: p),
+          child: FeedPost(key: ValueKey('feed-post-${p.id}'), post: p),
         ),
     ];
     // Suggestions after the second post, or last when the feed is short.
@@ -452,8 +455,6 @@ class FeedPost extends ConsumerStatefulWidget {
 
 class _FeedPostState extends ConsumerState<FeedPost>
     with TickerProviderStateMixin {
-  late bool _liked = widget.post.liked;
-  late int _likes = widget.post.likes;
   bool _expanded = false;
 
   /// Heart burst over the media: 450ms pop, 250ms hold, 200ms fade.
@@ -483,15 +484,6 @@ class _FeedPostState extends ConsumerState<FeedPost>
   ]).animate(CurvedAnimation(parent: _pop, curve: easeOut));
 
   @override
-  void didUpdateWidget(FeedPost old) {
-    super.didUpdateWidget(old);
-    if (old.post != widget.post) {
-      _liked = widget.post.liked;
-      _likes = widget.post.likes;
-    }
-  }
-
-  @override
   void dispose() {
     _burst.dispose();
     _pop.dispose();
@@ -500,34 +492,35 @@ class _FeedPostState extends ConsumerState<FeedPost>
 
   Post get _post => widget.post;
 
-  Future<void> _setLiked(bool like) async {
-    if (like == _liked) return;
+  // Watched in build; handlers re-read so they never act on a stale frame.
+  ({int likes, bool liked}) get _like =>
+      ref.watch(likeOverridesProvider.select((m) => m[_post.id])) ??
+      (likes: _post.likes, liked: _post.liked);
+  bool get _liked => _like.liked;
+  int get _likes => _like.likes;
+
+  /// [want] null toggles.
+  Future<void> _setLiked(bool? want) async {
+    final now =
+        ref.read(likeOverridesProvider)[_post.id]?.liked ?? _post.liked;
+    final like = want ?? !now;
+    if (like == now) return;
     like ? HapticFeedback.lightImpact() : HapticFeedback.selectionClick();
-    final before = (likes: _likes, liked: _liked);
-    setState(() {
-      _liked = like;
-      _likes += like ? 1 : -1;
-    });
     if (motion(context, pressDuration) != Duration.zero) {
       _pop.forward(from: 0);
     }
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      final r = await setLiked(ref.read(dioProvider), _post.id, like);
-      if (mounted) {
-        setState(() {
-          _liked = r.liked;
-          _likes = r.likes;
-        });
-      }
+      await toggleLike(
+        ref.read(dioProvider),
+        ref.read(likeOverridesProvider.notifier),
+        _post,
+        like,
+      );
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _liked = before.liked;
-        _likes = before.likes;
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      }
     }
   }
 
@@ -719,7 +712,7 @@ class _FeedPostState extends ConsumerState<FeedPost>
               child: IconButton(
                 key: ValueKey('like-${_post.id}'),
                 tooltip: _liked ? 'Unlike' : 'Like',
-                onPressed: () => _setLiked(!_liked),
+                onPressed: () => _setLiked(null),
                 icon: Icon(
                   _liked ? Icons.favorite : Icons.favorite_border,
                   color: _liked ? likeColor : null,
@@ -864,15 +857,17 @@ class _SuggestedCard extends ConsumerStatefulWidget {
 
 class _SuggestedCardState extends ConsumerState<_SuggestedCard> {
   late bool _following = widget.creator.isFollowing;
+  int _seq = 0;
 
   Future<void> _toggle() async {
-    HapticFeedback.mediumImpact();
     final follow = !_following;
+    follow ? HapticFeedback.mediumImpact() : HapticFeedback.selectionClick();
+    final seq = ++_seq;
     setState(() => _following = follow);
     try {
       await setFollowing(ref.read(dioProvider), widget.creator.id, follow);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _seq) return;
       setState(() => _following = !follow);
       ScaffoldMessenger.of(
         context,

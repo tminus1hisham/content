@@ -160,11 +160,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/stories/:creatorId',
         // Transparent, so a drag-to-dismiss reveals the home underneath.
-        pageBuilder: (_, state) => CustomTransitionPage(
+        pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
           opaque: false,
-          transitionDuration: mediumDuration,
-          reverseTransitionDuration: mediumDuration,
+          transitionDuration: motion(context, mediumDuration),
+          reverseTransitionDuration: motion(context, mediumDuration),
           child: StoryViewer(creatorId: state.pathParameters['creatorId']!),
           transitionsBuilder: (context, animation, _, child) {
             final t = animation.drive(CurveTween(curve: easeDrawer));

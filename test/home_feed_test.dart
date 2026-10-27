@@ -1,4 +1,5 @@
 import 'package:content/features/content/home_feed.dart';
+import 'package:content/features/content/media_view.dart';
 import 'package:flutter/gestures.dart' show kDoubleTapMinTime;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,6 +64,64 @@ void main() {
     expect(
       find.descendant(of: follow, matching: find.text('Following')),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('a liked post keeps its like after scrolling away and back', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    final free = _post('New single preview');
+    await _reveal(tester, free);
+    final post = tester.widget<FeedPost>(free).post;
+    expect(post.locked, isFalse);
+    final id = post.id;
+    final heart = find.descendant(
+      of: find.byKey(ValueKey('like-$id')),
+      matching: find.byIcon(Icons.favorite),
+    );
+    await _reveal(tester, find.byKey(ValueKey('like-$id')));
+    await tester.tap(find.byKey(ValueKey('like-$id')));
+    await tester.pumpAndSettle();
+    expect(heart, findsOneWidget);
+
+    for (var i = 0; i < 8; i++) {
+      await tester.drag(_feed.first, const Offset(0, -600));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('like-$id')), findsNothing);
+    for (var i = 0; i < 8; i++) {
+      await tester.drag(_feed.first, const Offset(0, 600));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+
+    expect(heart, findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(ValueKey('likes-$id'))).data,
+      '${post.likes + 1} ${post.likes + 1 == 1 ? 'like' : 'likes'}',
+    );
+  });
+
+  testWidgets('a locked post shows LockedMedia and never loads its media', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    final locked = find.byWidgetPredicate(
+      (w) => w is FeedPost && w.post.caption == 'Full routine, uncut',
+    );
+    await _reveal(tester, locked);
+    expect(tester.widget<FeedPost>(locked).post.locked, isTrue);
+    final id = tester.widget<FeedPost>(locked).post.id;
+    final scope = find.byKey(ValueKey('feed-post-$id'));
+    expect(
+      find.descendant(of: scope, matching: find.byType(LockedMedia)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: scope, matching: find.byType(MediaView)),
+      findsNothing,
     );
   });
 }

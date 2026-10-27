@@ -215,6 +215,37 @@ Future<({int likes, bool liked})> setLiked(
   );
 }
 
+/// Optimistic like state by post id, shared by the feed and the story viewer
+/// so it survives a post scrolling away. Cleared when the feed is refreshed.
+final likeOverridesProvider =
+    StateProvider<Map<String, ({int likes, bool liked})>>((_) => {});
+
+/// Latest like request per post: only that one may touch the shown state.
+final _likeSeq = <String, int>{};
+
+/// Optimistic like/unlike. Applies the server's count only if no later tap
+/// has happened; rolls back to the pre-tap value only on error of the latest.
+/// Rethrows so the caller can show the error.
+Future<void> toggleLike(
+  Dio dio,
+  StateController<Map<String, ({int likes, bool liked})>> store,
+  Post post,
+  bool like,
+) async {
+  void put(({int likes, bool liked}) v) =>
+      store.state = {...store.state, post.id: v};
+  final before = store.state[post.id] ?? (likes: post.likes, liked: post.liked);
+  final seq = _likeSeq[post.id] = (_likeSeq[post.id] ?? 0) + 1;
+  put((likes: before.likes + (like ? 1 : -1), liked: like));
+  try {
+    final r = await setLiked(dio, post.id, like);
+    if (_likeSeq[post.id] == seq) put(r);
+  } catch (_) {
+    if (_likeSeq[post.id] == seq) put(before);
+    rethrow;
+  }
+}
+
 /// Upload session → PUT to the signed URL → complete. Returns the media id.
 // ponytail: one PUT per file; switch to the storage provider's resumable
 // protocol (tus / multipart) once the Spring API picks it (FR-CNT-002).

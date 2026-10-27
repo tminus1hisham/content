@@ -1,4 +1,5 @@
 import 'package:content/features/content/home_feed.dart';
+import 'package:content/features/content/media_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -75,5 +76,47 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await _frame(tester);
     expect(_segment(tester), 'Story from Neema Mushi, 2 of 3');
+  });
+
+  testWidgets('a locked segment shows LockedMedia and no MediaView', (
+    tester,
+  ) async {
+    await _openNeema(tester);
+    var sawLocked = false;
+    for (var i = 0; i < 3; i++) {
+      final locked = find.descendant(
+        of: _viewer,
+        matching: find.byType(LockedMedia),
+      );
+      if (locked.evaluate().isNotEmpty) {
+        sawLocked = true;
+        expect(
+          find.descendant(of: _viewer, matching: find.byType(MediaView)),
+          findsNothing,
+        );
+      }
+      if (i < 2) await _tapRight(tester);
+    }
+    expect(sawLocked, isTrue);
+  });
+
+  testWidgets('the View post pill fits at 200% text with manual navigation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    final dispatcher = tester.platformDispatcher;
+    dispatcher.textScaleFactorTestValue = 2.0;
+    dispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(
+      accessibleNavigation: true,
+    );
+    addTearDown(() {
+      tester.view.reset();
+      dispatcher.clearTextScaleFactorTestValue();
+      dispatcher.clearAccessibilityFeaturesTestValue();
+    });
+    await _openNeema(tester);
+    expect(find.text('View post'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
