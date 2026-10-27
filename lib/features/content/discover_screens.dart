@@ -75,7 +75,7 @@ class _CreatorSearchScreenState extends ConsumerState<CreatorSearchScreen> {
                   children: [
                     Semantics(
                       header: true,
-                      child: Text('Discover', style: text.headlineMedium),
+                      child: Text('Search', style: text.headlineMedium),
                     ),
                     const SizedBox(height: 4),
                     Text(
