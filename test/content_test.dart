@@ -167,6 +167,48 @@ void main() {
         ['neema'],
       );
     });
+
+    test('feed is newest first and hides restricted and own posts', () async {
+      final dio = await _dioAs('fan@demo.ke');
+      List<Map> feed(Response<List> r) => r.data!.cast<Map>();
+      final before = feed(await dio.get('/feed'));
+      final times = [for (final p in before) p['createdAt'] as String];
+      expect(before, isNotEmpty);
+      expect(times, [...times]..sort((a, b) => b.compareTo(a)));
+
+      final hidden = before.first['id'] as String;
+      fakeContentDb.restrictPost(hidden);
+      final after = feed(await dio.get('/feed'));
+      expect(after.map((p) => p['id']), isNot(contains(hidden)));
+      expect(after, hasLength(before.length - 1));
+
+      final creator = await _dioAs('creator@demo.ke');
+      final own = feed(await creator.get('/feed'));
+      expect(own.map((p) => p['creator']['id']), isNot(contains('u2')));
+    });
+
+    test('likes are idempotent and show on the post', () async {
+      final dio = await _dioAs('fan@demo.ke');
+      final id = ((await dio.get<List>('/feed')).data!.first as Map)['id'];
+      Future<Map> post() async => (await dio.get<Map>('/posts/$id')).data!;
+      final start = (await post())['likes'] as int;
+      expect((await post())['liked'], false);
+
+      await dio.post('/posts/$id/like');
+      final liked = (await dio.post<Map>('/posts/$id/like')).data!;
+      expect(liked, {'likes': start + 1, 'liked': true});
+      expect(await post(), containsPair('likes', start + 1));
+      expect(await post(), containsPair('liked', true));
+
+      final unliked = (await dio.delete<Map>('/posts/$id/like')).data!;
+      expect(unliked, {'likes': start, 'liked': false});
+      expect(await post(), containsPair('liked', false));
+    });
+
+    test('liking an unknown post is 404', () async {
+      final dio = await _dioAs('fan@demo.ke');
+      expect(await _result(dio.post('/posts/nope/like')), 'NOT_FOUND');
+    });
   });
 
   testWidgets('fan browses a creator; locked posts never load media', (

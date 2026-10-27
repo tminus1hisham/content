@@ -62,11 +62,13 @@ The app does one PUT per file today. Tell us which resumable protocol you choose
   "media": [{"id": "…", "kind": "image|video"}],
   "createdAt": "…",
   "publishAt": "…",
-  "views": 12
+  "views": 12,
+  "likes": 120,
+  "liked": false
 }
 ```
 
-`publishAt` is optional. `views` is only included for the owner. `locked` is computed **per viewer** on the server.
+`publishAt` is optional. `likes` is the total like count and `liked` is whether the caller liked the post. `views` is only included for the owner. `locked` is computed **per viewer** on the server.
 
 | Endpoint | Notes |
 | --- | --- |
@@ -79,6 +81,9 @@ The app does one PUT per file today. Tell us which resumable protocol you choose
 | `DELETE /posts/{id}` | Soft delete, so purchases stay traceable |
 | `POST`/`DELETE /creators/{id}/follow` | Return the creator JSON |
 | `GET /discovery/creators?q=&category=` | Approved, discoverable creators |
+| `GET /feed` | **New.** `200 [post]`, newest first. Published posts from creators the caller follows or who are discoverable, never the caller's own. No ranking or paging yet |
+| `POST /posts/{id}/like` | **New.** `200 {likes, liked: true}`. Idempotent. `404 NOT_FOUND` unless the post exists and is published |
+| `DELETE /posts/{id}/like` | **New.** `200 {likes, liked: false}`. Idempotent. `404 NOT_FOUND` as above |
 
 ## Checkout, subscriptions, earnings and payouts (§9.8–9.10, §10)
 

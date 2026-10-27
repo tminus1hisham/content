@@ -57,6 +57,9 @@ class Post {
     required this.media,
     this.publishAt,
     this.views,
+    this.createdAt,
+    this.likes = 0,
+    this.liked = false,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -79,6 +82,11 @@ class Post {
           ? null
           : DateTime.parse(json['publishAt'] as String).toLocal(),
       views: json['views'] as int?,
+      createdAt: json['createdAt'] == null
+          ? null
+          : DateTime.parse(json['createdAt'] as String).toLocal(),
+      likes: json['likes'] as int? ?? 0,
+      liked: json['liked'] as bool? ?? false,
     );
   }
 
@@ -98,6 +106,9 @@ class Post {
   final List<PostMedia> media;
   final DateTime? publishAt;
   final int? views;
+  final DateTime? createdAt;
+  final int likes;
+  final bool liked;
 }
 
 const accessLabels = {
@@ -162,6 +173,10 @@ final myPostsProvider = FutureProvider.autoDispose.family<List<Post>, String>(
   ),
 );
 
+final feedProvider = FutureProvider.autoDispose<List<Post>>(
+  (ref) async => _posts(await _get<List<dynamic>>(ref, '/feed')),
+);
+
 final analyticsProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   (ref) => _get<Map<String, dynamic>>(ref, '/creators/me/analytics'),
 );
@@ -183,6 +198,21 @@ Future<Creator> setFollowing(Dio dio, String creatorId, bool follow) async {
       ? await dio.post<Map<String, dynamic>>(path)
       : await dio.delete<Map<String, dynamic>>(path);
   return Creator.fromJson(response.data!);
+}
+
+Future<({int likes, bool liked})> setLiked(
+  Dio dio,
+  String postId,
+  bool like,
+) async {
+  final path = '/posts/$postId/like';
+  final response = like
+      ? await dio.post<Map<String, dynamic>>(path)
+      : await dio.delete<Map<String, dynamic>>(path);
+  return (
+    likes: response.data!['likes'] as int,
+    liked: response.data!['liked'] as bool,
+  );
 }
 
 /// Upload session → PUT to the signed URL → complete. Returns the media id.

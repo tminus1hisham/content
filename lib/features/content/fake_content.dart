@@ -45,6 +45,7 @@ class _Post {
     required this.status,
     required this.createdAt,
     this.publishAt,
+    this.baseLikes = 0,
   });
   final String id;
   final String creatorId;
@@ -56,6 +57,10 @@ class _Post {
   final DateTime createdAt;
   final DateTime? publishAt;
   int views = 0;
+  final int baseLikes;
+  final likes = <String>{}; // fan ids
+
+  int get likeCount => baseLikes + likes.length;
 }
 
 class FakeContentDb {
@@ -143,6 +148,9 @@ class FakeContentDb {
         priceCents: price,
         status: 'published',
         createdAt: DateTime.utc(2026, 10, 1).add(Duration(hours: _seq)),
+        baseLikes:
+            id.codeUnits.fold(7, (a, b) => (a * 31 + b) & 0x7fffffff) % 900 +
+            40,
       );
     }
   }
@@ -233,6 +241,8 @@ class FakeContentDb {
       'media': [
         for (final id in post.mediaIds) {'id': id, 'kind': media[id]?.kind},
       ],
+      'likes': post.likeCount,
+      'liked': post.likes.contains(viewerId),
       'createdAt': post.createdAt.toIso8601String(),
       if (post.publishAt != null)
         'publishAt': post.publishAt!.toIso8601String(),
@@ -270,6 +280,14 @@ class FakeContentDb {
     if (post == null || post.creatorId != userId) return _notFound;
     return handle(post, userId);
   });
+
+  (int, Object?) _setLike(RequestOptions req, String id, bool like) =>
+      _signedIn(req, (userId) {
+        final post = _posts[id];
+        if (post == null || post.status != 'published') return _notFound;
+        like ? post.likes.add(userId) : post.likes.remove(userId);
+        return (200, {'likes': post.likeCount, 'liked': like});
+      });
 
   Map<String, FakeHandler> get routes => {
     'POST /media/upload-sessions': (req, _) => _signedIn(req, (userId) {
@@ -414,6 +432,29 @@ class FakeContentDb {
           post.status = 'removed';
           return (204, null);
         }),
+    // ponytail: no ranking or cursor; add ?before= when Spring defines paging
+    'GET /feed': (req, _) => _signedIn(req, (userId) {
+      bool shown(String creatorId) =>
+          _follows.contains('$userId|$creatorId') ||
+          creatorProfile(creatorId)?['discoverable'] != false &&
+              creatorProfile(creatorId) != null;
+      return (
+        200,
+        _sorted(
+          _posts.values.where(
+            (p) =>
+                p.status == 'published' &&
+                p.creatorId != userId &&
+                shown(p.creatorId),
+          ),
+          userId,
+        ),
+      );
+    }),
+    'POST /posts/{id}/like': (req, params) =>
+        _setLike(req, params['id']!, true),
+    'DELETE /posts/{id}/like': (req, params) =>
+        _setLike(req, params['id']!, false),
     'GET /creators/me/posts': (req, _) => _signedIn(req, (userId) {
       final status = req.queryParameters['status'];
       return (
