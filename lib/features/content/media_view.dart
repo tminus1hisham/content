@@ -140,6 +140,11 @@ class _NetworkVideoState extends State<_NetworkVideo> {
 /// Number of generic teaser covers in assets/covers/ (1.jpg … n.jpg).
 const lockedCoverCount = 12;
 
+/// The teaser cover for a post. Same post, same cover, so the feed doesn't
+/// reshuffle on rebuild and checkout shows the cover the fan tapped.
+String lockedCoverFor(String postId) =>
+    'assets/covers/${postId.codeUnits.fold(0, (a, b) => a + b) % lockedCoverCount + 1}.jpg';
+
 /// What a fan sees instead of restricted media (FR-DIS-003): a generic
 /// teaser cover, never the real image or a blur of it, plus what unlocking
 /// costs.
@@ -155,13 +160,10 @@ class LockedMedia extends StatelessWidget {
       'followers' => 'Follow to see this',
       _ => 'Locked',
     };
-    // Same post, same cover, so the feed doesn't reshuffle on rebuild.
-    final cover =
-        post.id.codeUnits.fold(0, (a, b) => a + b) % lockedCoverCount + 1;
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset('assets/covers/$cover.jpg', fit: BoxFit.cover),
+        Image.asset(lockedCoverFor(post.id), fit: BoxFit.cover),
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(

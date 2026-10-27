@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,7 @@ import '../../core/money.dart';
 import '../auth/auth_controller.dart';
 import '../content/content_api.dart';
 import '../content/discover_screens.dart';
+import '../content/media_view.dart';
 import '../disguise/lock_gate.dart';
 import '../disguise/pin_pad.dart';
 import 'commerce_api.dart';
@@ -235,86 +237,259 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final order = _order;
+    if (order == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Checkout')),
+        body: _error == null
+            ? const SkeletonList(count: 2, itemHeight: 120)
+            : StateView(icon: Icons.error_outline, title: _error!),
+      );
+    }
+    final text = Theme.of(context).textTheme;
+    final copy = _copyFor(order);
+    // Scaffold and panel share the surface colour, so the 24px the panel is
+    // lifted over the hero leaves no visible gap at the bottom.
     return Scaffold(
-      appBar: AppBar(title: const Text('Checkout')),
-      body: order == null
-          ? _error == null
-                ? const SkeletonList(count: 2, itemHeight: 120)
-                : StateView(icon: Icons.error_outline, title: _error!)
-          : ListView(
-              padding: _pad(context),
-              children: [
-                _OrderSummary(order: order),
-                const SizedBox(height: 16),
-                // Cross-fades form -> waiting -> outcome; no movement on a
-                // money screen.
-                AnimatedSwitcher(
-                  duration: motion(context, shortDuration),
-                  switchInCurve: easeOut,
-                  switchOutCurve: easeOut,
-                  // Top-aligned, so the outgoing view never shifts.
-                  layoutBuilder: (current, previous) => Stack(
-                    alignment: Alignment.topCenter,
-                    children: [...previous, ?current],
-                  ),
-                  child: KeyedSubtree(
-                    key: ValueKey(
-                      _paymentId == null
-                          ? 'form'
-                          : _outcomes.contains(_status)
-                          ? _status
-                          : 'waiting',
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
+        centerTitle: true,
+        toolbarHeight: 68,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Checkout',
+              style: text.titleLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              copy.subtitle,
+              style: text.bodyMedium?.copyWith(
+                color: Colors.white.withValues(alpha: 0.85),
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _paymentId == null ? _payBar(copy) : null,
+      body: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          _CheckoutHero(order: order, copy: copy),
+          Transform.translate(
+            offset: const Offset(0, -24),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(sheetRadius),
                     ),
-                    child: _paymentId == null
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: _payForm(),
-                          )
-                        : _result(order),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      28,
+                      20,
+                      16 + MediaQuery.paddingOf(context).bottom,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _PriceRow(order: order),
+                        const Divider(height: 40),
+                        // Cross-fades form -> waiting -> outcome; no movement
+                        // on a money screen.
+                        AnimatedSwitcher(
+                          duration: motion(context, shortDuration),
+                          switchInCurve: easeOut,
+                          switchOutCurve: easeOut,
+                          // Top-aligned, so the outgoing view never shifts.
+                          layoutBuilder: (current, previous) => Stack(
+                            alignment: Alignment.topCenter,
+                            children: [...previous, ?current],
+                          ),
+                          child: KeyedSubtree(
+                            key: ValueKey(
+                              _paymentId == null
+                                  ? 'form'
+                                  : _outcomes.contains(_status)
+                                  ? _status
+                                  : 'waiting',
+                            ),
+                            child: _paymentId == null
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: _payForm(copy),
+                                  )
+                                : _result(order),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
+              ),
             ),
+          ),
+        ],
+      ),
     );
   }
 
-  List<Widget> _payForm() => [
-    Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-      child: Text('Pay with', style: Theme.of(context).textTheme.titleMedium),
-    ),
-    _card(
-      child: ListTile(
-        leading: const _TonalIcon(Icons.phone_android),
-        title: const Text('M-Pesa'),
-        subtitle: const Text('You will get a prompt on your phone'),
-        trailing: Icon(
-          Icons.check_circle,
-          color: Theme.of(context).colorScheme.primary,
+  List<Widget> _payForm(_CheckoutCopy copy) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(
+          'Choose payment method',
+          style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
       ),
-    ),
-    const SizedBox(height: 12),
-    TextField(
-      key: const ValueKey('checkout-phone'),
-      controller: _phone,
-      keyboardType: TextInputType.phone,
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]'))],
-      decoration: const InputDecoration(
-        labelText: 'M-Pesa number',
-        hintText: '0712 345 678',
+      // The only method the server takes; shown selected, as one radio card.
+      Semantics(
+        selected: true,
+        inMutuallyExclusiveGroup: true,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+          decoration: BoxDecoration(
+            color: scheme.primary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(controlRadius),
+            border: Border.all(color: scheme.primary, width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.radio_button_checked, color: scheme.primary),
+                  const SizedBox(width: 12),
+                  const _TonalIcon(Icons.phone_android),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'M-Pesa',
+                          style: text.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          'You will get a prompt on your phone',
+                          style: text.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ExcludeSemantics(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _mpesaGreen,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'M-PESA',
+                        style: text.labelSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                key: const ValueKey('checkout-phone'),
+                controller: _phone,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'M-Pesa number',
+                  hintText: '0712 345 678',
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-    ),
-    const SizedBox(height: 16),
-    Pressable(
-      child: FilledButton(
-        key: const ValueKey('checkout-pay'),
-        style: brandButtonStyle(context),
-        onPressed: _busy ? null : _pay,
-        child: Text('Pay ${formatKes(_order!['totalCents'] as int)}'),
+    ];
+  }
+
+  /// Pinned under the form, so the CTA never scrolls off a short screen.
+  Widget _payBar(_CheckoutCopy copy) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
       ),
-    ),
-  ];
+      child: SafeArea(
+        top: false,
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Pressable(
+                    child: SizedBox(
+                      height: 56,
+                      child: FilledButton.icon(
+                        key: const ValueKey('checkout-pay'),
+                        style: brandButtonStyle(context),
+                        onPressed: _busy ? null : _pay,
+                        icon: const Icon(Icons.lock_outline, size: 20),
+                        label: Text(
+                          'Pay ${formatKes(_order!['totalCents'] as int)} '
+                          '& ${copy.verb}',
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    copy.footer,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _result(Json order) {
     final scheme = Theme.of(context).colorScheme;
@@ -448,71 +623,305 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 }
 
-class _OrderSummary extends StatelessWidget {
-  const _OrderSummary({required this.order});
+const _mpesaGreen = Color(0xFF3CA748);
+
+/// What checkout says about each kind of order. Only what the server
+/// actually grants is promised here.
+typedef _CheckoutCopy = ({
+  String subtitle,
+  String label,
+  String verb,
+  String footer,
+  List<(IconData, String)> benefits,
+});
+
+_CheckoutCopy _copyFor(Json order) {
+  final handle = _handleIn(order['description'] as String);
+  const oneOff = 'Secure M-Pesa payment · Instant access · No subscription';
+  return switch (order['type']) {
+    'post' => (
+      subtitle: 'Unlock this post',
+      label: 'Paid post',
+      verb: 'unlock',
+      footer: oneOff,
+      benefits: const [
+        (Icons.all_inclusive, 'Permanent access to this post'),
+        (Icons.receipt_long_outlined, 'Receipt kept in My library'),
+        (Icons.lock_open_outlined, 'Unlocks as soon as M-Pesa confirms'),
+      ],
+    ),
+    'subscription' => (
+      subtitle: 'Subscribe to @$handle',
+      label: 'Monthly subscription',
+      verb: 'subscribe',
+      footer: 'Secure M-Pesa payment · Cancel any time in My library',
+      benefits: const [
+        (Icons.photo_library_outlined, 'All subscriber posts'),
+        (Icons.chat_bubble_outline, 'Priority messages'),
+        (Icons.event_repeat, 'Renews monthly, cancel any time'),
+      ],
+    ),
+    'ticket' => (
+      subtitle: 'Get your live ticket',
+      label: 'Live ticket',
+      verb: 'get ticket',
+      footer: oneOff,
+      benefits: const [
+        (Icons.live_tv_outlined, 'Entry to this live stream'),
+        (Icons.confirmation_number_outlined, 'One payment, no renewal'),
+        (Icons.lock_open_outlined, 'Opens as soon as M-Pesa confirms'),
+      ],
+    ),
+    'tip' => (
+      subtitle: 'Send a live tip',
+      label: 'Live tip',
+      verb: 'send tip',
+      footer: 'Secure M-Pesa payment · One-time · No subscription',
+      benefits: [
+        (Icons.favorite_outline, 'Goes to @$handle'),
+        (Icons.payments_outlined, 'One payment, no renewal'),
+        (Icons.bolt_outlined, 'Sent as soon as M-Pesa confirms'),
+      ],
+    ),
+    _ => (
+      subtitle: 'Unlock this attachment',
+      label: 'Paid attachment',
+      verb: 'unlock',
+      footer: oneOff,
+      benefits: const [
+        (Icons.chat_outlined, 'Yours to keep in the chat'),
+        (Icons.all_inclusive, 'Permanent access'),
+        (Icons.lock_open_outlined, 'Unlocks as soon as M-Pesa confirms'),
+      ],
+    ),
+  };
+}
+
+/// Image-led header: a blurred backdrop, a framed preview and what the fan
+/// gets. Posts show their generic teaser cover, never the real media or a
+/// blur of it (FR-DIS-003); everything else shows the creator's banner.
+class _CheckoutHero extends StatelessWidget {
+  const _CheckoutHero({required this.order, required this.copy});
+  final Json order;
+  final _CheckoutCopy copy;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final handle = _handleIn(order['description'] as String);
+    final creatorId = order['creatorId'] as String? ?? handle;
+    final cover = order['type'] == 'post'
+        ? lockedCoverFor(order['itemId'] as String)
+        : null;
+    final preview = cover != null
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset(cover, fit: BoxFit.cover),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Glass(
+                    borderRadius: const BorderRadius.all(Radius.circular(999)),
+                    color: Colors.black.withValues(alpha: 0.35),
+                    child: const Padding(
+                      padding: EdgeInsets.all(7),
+                      child: Icon(
+                        Icons.lock_outline,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : Stack(
+            fit: StackFit.expand,
+            children: [
+              CreatorBanner(id: creatorId),
+              Center(
+                child: CreatorAvatar(
+                  id: creatorId,
+                  name: handle,
+                  size: 64,
+                  ring: true,
+                ),
+              ),
+            ],
+          );
+    final white = Colors.white.withValues(alpha: 0.88);
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: cover != null
+              // Scaled up so the blur never shows soft edges.
+              ? ClipRect(
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                    child: Transform.scale(
+                      scale: 1.2,
+                      child: Image.asset(cover, fit: BoxFit.cover),
+                    ),
+                  ),
+                )
+              : CreatorBanner(id: creatorId),
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.45),
+                  Colors.black.withValues(alpha: 0.25),
+                  Colors.black.withValues(alpha: 0.5),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
+              // Below the app bar; the bottom clears the lifted panel.
+              padding: EdgeInsets.fromLTRB(
+                24,
+                MediaQuery.paddingOf(context).top + 68 + 16,
+                24,
+                24 + 32,
+              ),
+              child: Row(
+                children: [
+                  ExcludeSemantics(
+                    child: Container(
+                      width: 132,
+                      height: 176,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(cardRadius),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.35),
+                            blurRadius: 24,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(cardRadius - 1.5),
+                        child: preview,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '@$handle',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        Text(
+                          copy.label,
+                          style: text.bodyMedium?.copyWith(color: white),
+                        ),
+                        const SizedBox(height: 16),
+                        for (final (icon, line) in copy.benefits)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(icon, size: 20, color: Colors.white),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    line,
+                                    style: text.bodySmall?.copyWith(
+                                      color: white,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PriceRow extends StatelessWidget {
+  const _PriceRow({required this.order});
   final Json order;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final description = order['description'] as String;
-    final muted = text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
-    Widget row(String label, String value) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: muted)),
-          Text(value, style: muted?.copyWith(fontFeatures: _tabular)),
-        ],
-      ),
-    );
-    return _card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final muted = text.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
+    final fees = order['feesCents'] as int;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
           children: [
-            Row(
-              children: [
-                CreatorAvatar(
-                  id: order['creatorId'] as String? ?? description,
-                  name: _handleIn(description),
-                ),
-                const SizedBox(width: 14),
-                Expanded(child: Text(description, style: text.titleMedium)),
-              ],
+            Expanded(
+              child: Text(
+                'Price',
+                style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
             ),
-            const SizedBox(height: 12),
-            row('Price', formatKes(order['amountCents'] as int)),
-            row('Fees', formatKes(order['feesCents'] as int)),
-            const Divider(height: 20),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Expanded(child: Text('Total', style: text.titleMedium)),
-                Text(
-                  formatKes(order['totalCents'] as int),
-                  style: text.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                    fontFeatures: _tabular,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
             Text(
-              order['recurring'] == true
-                  ? 'Renews every month until you cancel. Cancel any time in '
-                        'My library.'
-                  : 'One-time payment. No renewal.',
-              style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              formatKes(order['totalCents'] as int),
+              style: text.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                fontFeatures: _tabular,
+              ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(
+          order['recurring'] == true
+              ? 'Renews every month until you cancel.'
+              : 'One-time payment. No renewal.',
+          textAlign: TextAlign.end,
+          style: muted,
+        ),
+        if (fees > 0)
+          Text(
+            'Includes ${formatKes(fees)} fees',
+            textAlign: TextAlign.end,
+            style: muted?.copyWith(fontFeatures: _tabular),
+          ),
+      ],
     );
   }
 }
