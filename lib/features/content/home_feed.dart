@@ -14,6 +14,7 @@ import '../live/live_screens.dart';
 import 'content_api.dart';
 import 'discover_screens.dart';
 import 'media_view.dart';
+import 'story_viewer.dart';
 
 /// Bumped by the shell when the fan re-taps the Discover tab: scroll to top.
 final homeScrollTopProvider = StateProvider<int>((_) => 0);
@@ -22,23 +23,28 @@ final homeScrollTopProvider = StateProvider<int>((_) => 0);
 // ponytail: in-memory; persist in prefs if users ask
 final seenStoriesProvider = StateProvider<Set<String>>((_) => {});
 
-/// The one way into a creator's stories. Marks them seen, then (until the
-/// story viewer exists) opens the live room or the creator's page.
+/// The one way into a creator's stories: the live room when they're live,
+/// else the story viewer (which marks them seen), else their page.
 void openStories(BuildContext context, String creatorId) {
   final container = ProviderScope.containerOf(context, listen: false);
-  container
-      .read(seenStoriesProvider.notifier)
-      .update((seen) => {...seen, creatorId});
   final live = container
       .read(liveNowProvider)
       .valueOrNull
       ?.where((s) => (s['creator'] as Map)['id'] == creatorId)
       .firstOrNull;
+  final posts = container.read(feedProvider).valueOrNull ?? const <Post>[];
+  if (live == null && storySegments(posts, creatorId).isNotEmpty) {
+    context.push('/stories/$creatorId');
+    return;
+  }
+  container
+      .read(seenStoriesProvider.notifier)
+      .update((seen) => {...seen, creatorId});
   if (live != null) {
     context.push('/live/${live['id']}');
     return;
   }
-  final handle = (container.read(feedProvider).valueOrNull ?? const <Post>[])
+  final handle = posts
       .where((p) => p.creatorId == creatorId)
       .firstOrNull
       ?.creatorHandle;
@@ -275,8 +281,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-typedef _StoryCreator = ({String id, String handle, String name, bool live});
-
 /// Story circles: live creators first, then unseen, then seen.
 class StoriesTray extends ConsumerWidget {
   const StoriesTray({super.key, required this.posts, required this.live});
@@ -286,36 +290,7 @@ class StoriesTray extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final seen = ref.watch(seenStoriesProvider);
-    final byId = <String, _StoryCreator>{};
-    for (final s in live) {
-      final c = s['creator'] as Map;
-      final id = c['id'] as String;
-      byId[id] = (
-        id: id,
-        handle: c['handle'] as String? ?? '',
-        name: c['displayName'] as String? ?? '',
-        live: true,
-      );
-    }
-    for (final p in posts) {
-      byId.putIfAbsent(
-        p.creatorId,
-        () => (
-          id: p.creatorId,
-          handle: p.creatorHandle,
-          name: p.creatorName,
-          live: false,
-        ),
-      );
-    }
-    int rank(_StoryCreator c) => c.live ? 0 : (seen.contains(c.id) ? 2 : 1);
-    // List.sort is not stable; break ties on feed order.
-    final order = byId.values.toList();
-    final creators = [...order]
-      ..sort((a, b) {
-        final r = rank(a).compareTo(rank(b));
-        return r != 0 ? r : order.indexOf(a).compareTo(order.indexOf(b));
-      });
+    final creators = storyOrder(live, posts, seen);
     if (creators.isEmpty) return const SizedBox.shrink();
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -338,7 +313,7 @@ class StoriesTray extends ConsumerWidget {
 
 class _StoryCircle extends StatefulWidget {
   const _StoryCircle({super.key, required this.creator, required this.seen});
-  final _StoryCreator creator;
+  final StoryCreator creator;
   final bool seen;
 
   @override
@@ -350,10 +325,7 @@ class _StoryCircleState extends State<_StoryCircle>
   static const _avatar = 68.0;
   static const _ring = _avatar + 12;
 
-  late final _spin = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 800),
-  );
+  late final _spin = AnimationController(vsync: this, duration: mediumDuration);
 
   @override
   void dispose() {
@@ -361,12 +333,13 @@ class _StoryCircleState extends State<_StoryCircle>
     super.dispose();
   }
 
-  Future<void> _open() async {
+  /// Opens at once; the ring's spin is a flourish alongside the push.
+  void _open() {
     HapticFeedback.selectionClick();
     if (motion(context, _spin.duration!) != Duration.zero) {
-      await _spin.forward(from: 0);
+      _spin.forward(from: 0);
     }
-    if (mounted) openStories(context, widget.creator.id);
+    openStories(context, widget.creator.id);
   }
 
   @override

@@ -11,6 +11,7 @@ import '../features/disguise/lock_gate.dart';
 import '../features/commerce/commerce_screens.dart';
 import '../features/content/discover_screens.dart';
 import '../features/content/home_feed.dart';
+import '../features/content/story_viewer.dart';
 import '../features/content/studio_screens.dart';
 import '../features/live/live_screens.dart';
 import '../features/messages/messages_screens.dart';
@@ -21,6 +22,7 @@ import '../features/settings/disguise_screen.dart';
 import '../features/settings/privacy_screen.dart';
 import '../features/settings/security_screen.dart';
 import '../features/settings/settings_screen.dart';
+import 'motion.dart';
 import 'ui.dart';
 
 enum UserRole { fan, creator }
@@ -155,6 +157,27 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/search', builder: (_, _) => const CreatorSearchScreen()),
+      GoRoute(
+        path: '/stories/:creatorId',
+        // Transparent, so a drag-to-dismiss reveals the home underneath.
+        pageBuilder: (_, state) => CustomTransitionPage(
+          key: state.pageKey,
+          opaque: false,
+          transitionDuration: mediumDuration,
+          reverseTransitionDuration: mediumDuration,
+          child: StoryViewer(creatorId: state.pathParameters['creatorId']!),
+          transitionsBuilder: (context, animation, _, child) {
+            final t = animation.drive(CurveTween(curve: easeDrawer));
+            final fade = FadeTransition(opacity: t, child: child);
+            return MediaQuery.disableAnimationsOf(context)
+                ? fade
+                : ScaleTransition(
+                    scale: t.drive(Tween(begin: 0.92, end: 1.0)),
+                    child: fade,
+                  );
+          },
+        ),
+      ),
       GoRoute(
         path: '/p/:id',
         builder: (_, state) =>
