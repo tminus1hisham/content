@@ -149,8 +149,11 @@ String lockedCoverFor(String postId) =>
 /// teaser cover, never the real image or a blur of it, plus what unlocking
 /// costs.
 class LockedMedia extends StatelessWidget {
-  const LockedMedia({super.key, required this.post});
+  const LockedMedia({super.key, required this.post, this.showPrompt = true});
   final Post post;
+
+  /// False for small previews that carry their own access badge or button.
+  final bool showPrompt;
 
   @override
   Widget build(BuildContext context) {
@@ -174,56 +177,57 @@ class LockedMedia extends StatelessWidget {
           ),
         ),
         // Grid tiles get a smaller pill so the price is never cut off.
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 260;
-            final label = Text(
-              labelText,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style:
-                  (compact
-                          ? Theme.of(context).textTheme.labelMedium
-                          : Theme.of(context).textTheme.labelLarge)
-                      ?.copyWith(color: Colors.white),
-            );
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Glass(
-                  borderRadius: const BorderRadius.all(Radius.circular(999)),
-                  color: Colors.black.withValues(alpha: 0.35),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.18),
-                  ),
-                  child: Padding(
-                    padding: compact
-                        ? const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 7,
-                          )
-                        : const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
+        if (showPrompt)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 260;
+              final label = Text(
+                labelText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    (compact
+                            ? Theme.of(context).textTheme.labelMedium
+                            : Theme.of(context).textTheme.labelLarge)
+                        ?.copyWith(color: Colors.white),
+              );
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Glass(
+                    borderRadius: const BorderRadius.all(Radius.circular(999)),
+                    color: Colors.black.withValues(alpha: 0.35),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
+                    child: Padding(
+                      padding: compact
+                          ? const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 7,
+                            )
+                          : const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.lock_outline,
+                            size: compact ? 14 : 18,
+                            color: Colors.white,
                           ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.lock_outline,
-                          size: compact ? 14 : 18,
-                          color: Colors.white,
-                        ),
-                        SizedBox(width: compact ? 6 : 8),
-                        Flexible(child: label),
-                      ],
+                          SizedBox(width: compact ? 6 : 8),
+                          Flexible(child: label),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
-        ),
+              );
+            },
+          ),
       ],
     );
   }

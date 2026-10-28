@@ -228,7 +228,13 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     }
 
     final text = Theme.of(context).textTheme;
-    for (final (i, p) in posts.indexed) {
+    // The lead is the first post the fan can actually see.
+    final lead = posts.firstWhere(
+      (p) => !p.locked && p.media.isNotEmpty,
+      orElse: () => posts.first,
+    );
+    final ordered = [lead, ...posts.where((p) => p != lead)];
+    for (final (i, p) in ordered.indexed) {
       if (i == 1) {
         add(
           Semantics(
@@ -545,8 +551,9 @@ class _StoryCircleState extends State<_StoryCircle>
           ),
           CreatorAvatar(id: c.id, name: c.name, size: _face),
           if (c.live)
+            // Straddles the ring's bottom edge, clear of the initial.
             Positioned(
-              bottom: 0,
+              bottom: -8,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
@@ -764,9 +771,24 @@ class _FeedPostState extends ConsumerState<FeedPost>
     ),
   );
 
-  Widget _media() => _locked
-      ? LockedMedia(post: _post)
+  Widget _media({bool prompt = true}) => _locked
+      ? LockedMedia(post: _post, showPrompt: prompt)
       : MediaView(mediaId: _post.media.first.id);
+
+  Widget _unlockButton(BuildContext context, {double minHeight = 0}) =>
+      Pressable(
+        child: FilledButton(
+          style: brandButtonStyle(
+            context,
+          ).copyWith(minimumSize: WidgetStatePropertyAll(Size(0, minHeight))),
+          onPressed: _unlock,
+          child: Text(switch (_post.access) {
+            'paid' => 'Unlock · ${formatKes(_post.priceCents ?? 0)}',
+            'subscribers' => 'Subscribe',
+            _ => 'View profile',
+          }),
+        ),
+      );
 
   Widget _heart() => IgnorePointer(
     child: AnimatedBuilder(
@@ -880,7 +902,7 @@ class _FeedPostState extends ConsumerState<FeedPost>
     final picture = Stack(
       fit: StackFit.expand,
       children: [
-        _tappable(_media()),
+        _tappable(_media(prompt: false)),
         if (!large)
           const IgnorePointer(
             child: DecoratedBox(
@@ -915,16 +937,27 @@ class _FeedPostState extends ConsumerState<FeedPost>
             left: 16,
             right: 4,
             bottom: 12,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Taps fall through to the media.
-                Expanded(
-                  child: IgnorePointer(
-                    child: details(Colors.white, Colors.white),
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Taps fall through to the media.
+                    Expanded(
+                      child: IgnorePointer(
+                        child: details(Colors.white, Colors.white),
+                      ),
+                    ),
+                    _likeButton(color: Colors.white),
+                  ],
                 ),
-                _likeButton(color: Colors.white),
+                if (_locked)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10, right: 12),
+                    child: _unlockButton(context, minHeight: 52),
+                  ),
               ],
             ),
           ),
@@ -947,6 +980,11 @@ class _FeedPostState extends ConsumerState<FeedPost>
             ],
           ),
         ),
+        if (_locked)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: _unlockButton(context, minHeight: 52),
+          ),
       ],
     );
   }
@@ -961,7 +999,7 @@ class _FeedPostState extends ConsumerState<FeedPost>
       child: SizedBox(
         width: large ? double.infinity : 88,
         height: large ? 160 : 104,
-        child: LockedMedia(post: _post),
+        child: LockedMedia(post: _post, showPrompt: false),
       ),
     );
     final details = Column(
@@ -994,17 +1032,7 @@ class _FeedPostState extends ConsumerState<FeedPost>
           ),
         ],
         const SizedBox(height: 10),
-        Pressable(
-          child: FilledButton(
-            style: brandButtonStyle(context),
-            onPressed: _unlock,
-            child: Text(switch (_post.access) {
-              'paid' => 'Unlock · ${formatKes(_post.priceCents ?? 0)}',
-              'subscribers' => 'Subscribe',
-              _ => 'View profile',
-            }),
-          ),
-        ),
+        _unlockButton(context),
       ],
     );
     return Semantics(
@@ -1267,7 +1295,7 @@ class _CreatorRoomState extends ConsumerState<_CreatorRoom> {
     final meta = [
       '@${c.handle}',
       ?c.categories.firstOrNull,
-      '${compactCount(c.followers)} followers',
+      if (c.followers > 0) '${compactCount(c.followers)} followers',
     ].join(' · ');
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1286,10 +1314,7 @@ class _CreatorRoomState extends ConsumerState<_CreatorRoom> {
       ],
     );
     Widget grid(List<Widget> tiles) => large
-        ? Column(
-            spacing: 8,
-            children: [for (final t in tiles) SizedBox(height: 150, child: t)],
-          )
+        ? Column(spacing: 8, children: tiles)
         : Row(
             spacing: 8,
             children: [
@@ -1392,6 +1417,10 @@ class _RoomTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locked = post.locked || post.media.isEmpty;
+    final large = _largeText(context);
+    final media = locked
+        ? LockedMedia(post: post, showPrompt: false)
+        : MediaView(mediaId: post.media.first.id);
     return Semantics(
       button: true,
       label: locked ? 'Locked post: ${post.caption}' : post.caption,
@@ -1400,17 +1429,31 @@ class _RoomTile extends StatelessWidget {
         onTap: () => context.push('/p/${post.id}'),
         child: ClipRRect(
           borderRadius: const BorderRadius.all(Radius.circular(controlRadius)),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (locked)
-                LockedMedia(post: post)
-              else
-                MediaView(mediaId: post.media.first.id),
-              if (locked)
-                Positioned(top: 8, left: 8, child: _AccessChip(post: post)),
-            ],
-          ),
+          // Large text: the badge sits under the media, not over it.
+          child: large
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(height: 150, child: media),
+                    if (locked)
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: _AccessChip(post: post),
+                      ),
+                  ],
+                )
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    media,
+                    if (locked)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: _AccessChip(post: post),
+                      ),
+                  ],
+                ),
         ),
       ),
     );

@@ -28,7 +28,7 @@ void main() {
 
   testWidgets('double-tapping a post likes it', (tester) async {
     await pumpApp(tester);
-    final post = _post('New single preview');
+    final post = _post('Morning stretch routine');
     await _reveal(tester, post);
     final id = tester.widget<FeedPost>(post).post.id;
     final before = tester.widget<FeedPost>(post).post.likes;
@@ -71,7 +71,7 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester);
-    final free = _post('New single preview');
+    final free = _post('Morning stretch routine');
     await _reveal(tester, free);
     final post = tester.widget<FeedPost>(free).post;
     expect(post.locked, isFalse);
@@ -123,6 +123,16 @@ void main() {
       find.descendant(of: scope, matching: find.byType(MediaView)),
       findsNothing,
     );
+  });
+
+  testWidgets('the lead is the first unlocked post, not a locked one', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    final lead = tester.widgetList<FeedPost>(find.byType(FeedPost)).first;
+    expect(lead.lead, isTrue);
+    expect(lead.post.locked, isFalse);
+    expect(lead.post.caption, isNot('Pilau, my way'));
   });
 
   testWidgets("a post's menu opens above the tab bar", (tester) async {
