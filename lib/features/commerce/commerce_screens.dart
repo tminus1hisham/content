@@ -1039,7 +1039,10 @@ class _StepDot extends StatelessWidget {
 
 /// IT.md F8, F9 and F11: purchases, receipts, refunds and subscriptions.
 class LibraryScreen extends ConsumerWidget {
-  const LibraryScreen({super.key});
+  const LibraryScreen({super.key, this.initialTab = 0});
+
+  /// 0 Purchases, 1 Subscriptions.
+  final int initialTab;
 
   Future<void> _refund(BuildContext context, WidgetRef ref, Json order) async {
     final reason = TextEditingController();
@@ -1113,6 +1116,7 @@ class LibraryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return DefaultTabController(
       length: 2,
+      initialIndex: initialTab,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('My library'),

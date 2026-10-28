@@ -14,6 +14,9 @@ void main() {
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
+    // Below the fold on Profile at the test viewport size.
+    await tester.ensureVisible(find.text('Settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Appearance'));
@@ -33,6 +36,9 @@ void main() {
     final semantics = tester.ensureSemantics();
     await pumpApp(tester);
     await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    // Below the fold on Profile at the test viewport size.
+    await tester.ensureVisible(find.text('Settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
@@ -54,7 +60,7 @@ void main() {
     await pumpApp(tester, signedInAs: 'creator@demo.ke');
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Creator view'));
+    await tester.tap(find.byKey(const ValueKey('workspace-creator')));
     await tester.pumpAndSettle();
 
     expect(find.text('Studio'), findsOneWidget);

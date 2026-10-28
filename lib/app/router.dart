@@ -197,7 +197,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           amountCents: int.tryParse(state.uri.queryParameters['amount'] ?? ''),
         ),
       ),
-      GoRoute(path: '/library', builder: (_, _) => const LibraryScreen()),
+      GoRoute(
+        path: '/library',
+        builder: (_, state) => LibraryScreen(
+          initialTab: state.uri.queryParameters['tab'] == 'subscriptions'
+              ? 1
+              : 0,
+        ),
+      ),
       GoRoute(
         path: '/live/:id',
         builder: (_, state) => LiveRoomScreen(id: state.pathParameters['id']!),

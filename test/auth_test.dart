@@ -185,6 +185,9 @@ void main() {
   testWidgets('log out returns to the welcome screen', (tester) async {
     await pumpApp(tester);
     await _tapText(tester, 'Profile');
+    // Below the fold on Profile at the test viewport size.
+    await tester.ensureVisible(find.text('Log out'));
+    await tester.pumpAndSettle();
     await _tapText(tester, 'Log out');
     expect(find.text('Create account'), findsOneWidget);
     expect(await secureStorage.read(key: accessTokenKey), isNull);
