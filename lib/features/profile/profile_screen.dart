@@ -190,7 +190,7 @@ class _FanBody extends ConsumerWidget {
       children: [
         LayoutBuilder(
           builder: (context, box) {
-            final rows = _largeText(context) || (box.maxWidth - 16) / 3 < 112;
+            final rows = _largeText(context) || (box.maxWidth - 16) / 3 < 88;
             final cells = [
               for (final (value, label, onTap) in counts)
                 _Count(value: value, label: label, row: rows, onTap: onTap),
@@ -268,10 +268,7 @@ class _CreatorBody extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 24),
-        ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 156),
-          child: const _SettingsTile(),
-        ),
+        const _SettingsTile(row: true),
       ],
     );
   }
@@ -286,6 +283,13 @@ class _Pair extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_largeText(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 12,
+        children: children,
+      );
+    }
     final sized = [
       for (final c in children)
         ConstrainedBox(
@@ -293,13 +297,6 @@ class _Pair extends StatelessWidget {
           child: c,
         ),
     ];
-    if (_largeText(context)) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 12,
-        children: sized,
-      );
-    }
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -526,6 +523,7 @@ class _QuietTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.row = false,
   });
 
   final IconData icon;
@@ -533,10 +531,46 @@ class _QuietTile extends StatelessWidget {
   final String subtitle;
   final VoidCallback onTap;
 
+  /// A full-width compact row instead of a tall tile.
+  final bool row;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    if (row) {
+      return Pressable(
+        child: _Card(
+          onTap: onTap,
+          color: cs.surfaceContainer,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 40),
+            child: Row(
+              spacing: 16,
+              children: [
+                Icon(icon, size: 24, color: cs.onSurface),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(title, style: tt.titleMedium),
+                      Text(
+                        subtitle,
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, size: 20, color: cs.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Pressable(
       child: _Card(
         onTap: onTap,
@@ -561,10 +595,13 @@ class _QuietTile extends StatelessWidget {
 }
 
 class _SettingsTile extends StatelessWidget {
-  const _SettingsTile();
+  const _SettingsTile({this.row = false});
+
+  final bool row;
 
   @override
   Widget build(BuildContext context) => _QuietTile(
+    row: row,
     icon: Icons.settings_outlined,
     title: 'Settings',
     subtitle: 'Privacy, lock and appearance',

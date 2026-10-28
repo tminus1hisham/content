@@ -48,6 +48,22 @@ void main() {
     expect(_tab('Studio'), findsOneWidget);
   });
 
+  testWidgets('fan: counts stay three columns at default text on a phone', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpApp(tester);
+    await _tap(tester, _tab('Profile'));
+    final tops = [
+      for (final l in ['Subscriptions', 'Purchases', 'Following'])
+        tester.getTopLeft(find.text(l).first).dy,
+    ];
+    expect(tops[1], tops[0]);
+    expect(tops[2], tops[0]);
+  });
+
   testWidgets('fan: Subscriptions count opens My library on Subscriptions', (
     tester,
   ) async {
