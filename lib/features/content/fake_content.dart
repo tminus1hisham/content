@@ -166,6 +166,9 @@ class FakeContentDb {
   void grantPurchase(String fanId, String postId) =>
       _purchases.add('$fanId|$postId');
 
+  void grantFollow(String fanId, String creatorId) =>
+      _follows.add('$fanId|$creatorId');
+
   void grantSubscription(String fanId, String creatorId) =>
       _subscriptions.add('$fanId|$creatorId');
 

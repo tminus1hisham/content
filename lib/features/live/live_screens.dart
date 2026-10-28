@@ -87,20 +87,10 @@ class LiveNowScreen extends ConsumerWidget {
                         ),
                       ],
                     )
-                  : ListView.separated(
-                      padding: EdgeInsets.fromLTRB(
-                        gutter,
-                        8,
-                        gutter,
-                        24 + bottom,
-                      ),
-                      itemCount: sessions.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 14),
-                      itemBuilder: (context, i) => Entrance(
-                        key: ValueKey(sessions[i]['id']),
-                        index: i,
-                        child: _LiveCard(session: sessions[i]),
-                      ),
+                  : _StageAndRail(
+                      sessions: sessions,
+                      gutter: gutter,
+                      bottom: bottom,
                     ),
             ),
           ),
@@ -110,166 +100,356 @@ class LiveNowScreen extends ConsumerWidget {
   }
 }
 
-/// A live session as a lit stage: the host's cover, their ringed avatar and
-/// the access terms, then the title.
-class _LiveCard extends StatelessWidget {
-  const _LiveCard({required this.session});
+/// One room on the stage (the first the fan can open, else the first), the
+/// rest on a rail beneath it.
+class _StageAndRail extends StatelessWidget {
+  const _StageAndRail({
+    required this.sessions,
+    required this.gutter,
+    required this.bottom,
+  });
+  final List<_Json> sessions;
+  final double gutter;
+  final double bottom;
+
+  @override
+  Widget build(BuildContext context) {
+    final stage = sessions.firstWhere(
+      (s) => s['hasAccess'] == true,
+      orElse: () => sessions.first,
+    );
+    final rail = [
+      for (final s in sessions)
+        if (!identical(s, stage)) s,
+    ];
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 0),
+          sliver: SliverToBoxAdapter(
+            child: Entrance(
+              key: ValueKey(stage['id']),
+              child: _LiveStage(session: stage),
+            ),
+          ),
+        ),
+        if (rail.isNotEmpty) ...[
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(gutter, 28, gutter, 12),
+            sliver: SliverToBoxAdapter(
+              child: Text(
+                'Also live',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          // ponytail: builds every tile; a lazy ListView with a measured
+          // height if rooms ever run into the dozens.
+          SliverToBoxAdapter(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.symmetric(horizontal: gutter),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < rail.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 12),
+                      Entrance(
+                        key: ValueKey(rail[i]['id']),
+                        index: i + 1,
+                        child: _LiveTile(session: rail[i]),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+        SliverToBoxAdapter(child: SizedBox(height: 24 + bottom)),
+      ],
+    );
+  }
+}
+
+/// Access terms on frosted glass, for laying over a cover.
+class _AccessChip extends StatelessWidget {
+  const _AccessChip({required this.session, this.compact = false});
   final _Json session;
 
-  static const _stageHeight = 156.0;
+  /// Just the price for a ticket, for narrow tiles; the icon says "ticket".
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) => _RoomGlass(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(_accessIcon(session), size: 15, color: Colors.white),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            compact && session['access'] == 'ticketed'
+                ? formatKes(session['priceCents'] as int)
+                : _accessLabel(session),
+            semanticsLabel: _accessLabel(session),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: Colors.white,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// The host's cover with their ringed avatar in the middle, under [overlays].
+Widget _coverArt(_Json creator, double avatarSize, List<Widget> overlays) =>
+    Stack(
+      fit: StackFit.expand,
+      children: [
+        CreatorBanner(id: creator['id'] as String),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.2),
+                Colors.black.withValues(alpha: 0),
+                Colors.black.withValues(alpha: 0.32),
+              ],
+            ),
+          ),
+        ),
+        Center(
+          child: CreatorAvatar(
+            id: creator['id'] as String,
+            name: creator['displayName'] as String,
+            size: avatarSize,
+            ring: true,
+          ),
+        ),
+        ...overlays,
+      ],
+    );
+
+/// A room's card: tonal surface, hairline, press scale; taps open the room.
+Widget _roomCard(BuildContext context, _Json session, Widget child) {
+  final scheme = Theme.of(context).colorScheme;
+  return Pressable(
+    child: Material(
+      color: scheme.surfaceContainerLow,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(cardRadius)),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      child: InkWell(
+        onTap: () => context.push('/live/${session['id']}'),
+        child: child,
+      ),
+    ),
+  );
+}
+
+/// The featured room: a 4:3 lit cover, the title, the host and a way in.
+class _LiveStage extends StatelessWidget {
+  const _LiveStage({required this.session});
+  final _Json session;
 
   @override
   Widget build(BuildContext context) {
     final s = session;
     final creator = s['creator'] as _Json;
     final name = creator['displayName'] as String;
+    return _roomCard(
+      context,
+      s,
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LayoutBuilder(
+            // 4:3, capped so the rail still shows beneath on short or wide
+            // screens.
+            builder: (context, box) => SizedBox(
+              height: math.min(
+                box.maxWidth * 3 / 4,
+                MediaQuery.sizeOf(context).height * 0.3,
+              ),
+              child: _coverArt(creator, 96, [
+                Positioned(
+                  top: 14,
+                  left: 14,
+                  right: 14,
+                  child: Row(
+                    children: [
+                      const _LiveBadge(),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: _AccessChip(session: s),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  s['title'] as String,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                _HostLine(session: s),
+                const SizedBox(height: 16),
+                FilledButton(
+                  style: brandButtonStyle(context),
+                  onPressed: () => context.push('/live/${s['id']}'),
+                  child: Text(
+                    s['hasAccess'] == true ? 'Join $name' : 'View entry',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A room on the rail: a 3:4 cover with its terms, then the title and host.
+class _LiveTile extends StatelessWidget {
+  const _LiveTile({required this.session});
+  final _Json session;
+
+  static const _width = 152.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = session;
+    final creator = s['creator'] as _Json;
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final muted = text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
-    return Pressable(
-      child: Material(
-        color: scheme.surfaceContainerLow,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(cardRadius)),
-          side: BorderSide(color: scheme.outlineVariant),
-        ),
-        child: InkWell(
-          onTap: () => context.push('/live/${s['id']}'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                height: _stageHeight,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CreatorBanner(id: creator['id'] as String),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.18),
-                            Colors.black.withValues(alpha: 0),
-                            Colors.black.withValues(alpha: 0.28),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Center(
-                      child: CreatorAvatar(
-                        id: creator['id'] as String,
-                        name: name,
-                        size: 68,
-                        ring: true,
-                      ),
-                    ),
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      right: 12,
-                      child: Row(
-                        children: [
-                          const _LiveBadge(),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: _RoomGlass(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _accessIcon(s),
-                                      size: 15,
-                                      color: Colors.white,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        _accessLabel(s),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: text.labelMedium?.copyWith(
-                                          color: Colors.white,
-                                          fontFeatures: const [
-                                            FontFeature.tabularFigures(),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+    return SizedBox(
+      width: _width,
+      child: _roomCard(
+        context,
+        s,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 3 / 4,
+              child: _coverArt(creator, 56, [
+                const Positioned(top: 10, left: 10, child: _LiveBadge()),
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _AccessChip(session: s, compact: true),
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      s['title'] as String,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    s['title'] as String,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: muted,
-                          ),
-                        ),
-                        if (creator['verified'] == true) ...[
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.verified,
-                            size: 15,
-                            color: scheme.primary,
-                            semanticLabel: 'Verified creator',
-                          ),
-                        ],
-                        Text(' · ', style: muted),
-                        Flexible(
-                          child: Text(
-                            _liveFor(s),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: muted?.copyWith(
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    creator['displayName'] as String,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/// The host's name, a verified tick, and how long they've been live.
+class _HostLine extends StatelessWidget {
+  const _HostLine({required this.session});
+  final _Json session;
+
+  @override
+  Widget build(BuildContext context) {
+    final creator = session['creator'] as _Json;
+    final scheme = Theme.of(context).colorScheme;
+    final muted = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant);
+    return Row(
+      children: [
+        Flexible(
+          child: Text(
+            creator['displayName'] as String,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: muted,
+          ),
+        ),
+        if (creator['verified'] == true) ...[
+          const SizedBox(width: 4),
+          Icon(
+            Icons.verified,
+            size: 15,
+            color: scheme.primary,
+            semanticLabel: 'Verified creator',
+          ),
+        ],
+        Text(' · ', style: muted),
+        Flexible(
+          child: Text(
+            _liveFor(session),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: muted?.copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

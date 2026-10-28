@@ -124,4 +124,14 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets("a post's menu opens above the tab bar", (tester) async {
+    await pumpApp(tester);
+    await tester.tap(find.byTooltip('More').first);
+    await tester.pumpAndSettle();
+    // Under the floating tab bar this tap would land on the bar instead.
+    await tester.tap(find.text('View post'));
+    await tester.pumpAndSettle();
+    expect(find.text('Post'), findsOneWidget);
+  });
 }

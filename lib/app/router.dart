@@ -10,6 +10,7 @@ import '../features/disguise/disguise_controller.dart';
 import '../features/disguise/lock_gate.dart';
 import '../features/commerce/commerce_screens.dart';
 import '../features/content/discover_screens.dart';
+import '../features/content/following_screen.dart';
 import '../features/content/home_feed.dart';
 import '../features/content/story_viewer.dart';
 import '../features/content/studio_screens.dart';

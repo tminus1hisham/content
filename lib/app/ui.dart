@@ -61,8 +61,10 @@ class _PressableState extends State<Pressable> {
   bool _down = false;
   Offset _start = Offset.zero;
 
+  // The press can outlive the widget: a long-press that moves its tile
+  // disposes it before the finger lifts.
   void _set(bool down) {
-    if (_down != down) setState(() => _down = down);
+    if (mounted && _down != down) setState(() => _down = down);
   }
 
   @override

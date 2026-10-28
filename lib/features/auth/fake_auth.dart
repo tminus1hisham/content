@@ -67,6 +67,8 @@ class FakeAuthDb {
   }
 
   /// A signed-in session for a seeded user, for tests and demos.
+  String userIdFor(String identifier) => _users[identifier]!.id;
+
   Map<String, Object?> sessionFor(String identifier) =>
       _session(_users[identifier]!);
 

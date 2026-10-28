@@ -31,7 +31,7 @@ Widget asyncBody<T>(
 );
 
 /// Side gutter that centres a [maxWidth] column on wide screens.
-double _gutter(BuildContext context, [double maxWidth = 640]) =>
+double gutterFor(BuildContext context, [double maxWidth = 640]) =>
     math.max(16, (MediaQuery.sizeOf(context).width - maxWidth) / 2);
 
 /// IT.md F3: creator search, opened from the home top bar.
@@ -60,7 +60,7 @@ class _CreatorSearchScreenState extends ConsumerState<CreatorSearchScreen> {
     final shown = results.valueOrNull ?? (results.isLoading ? _last : null);
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
-    final gutter = _gutter(context, 980);
+    final gutter = gutterFor(context, 980);
     // The header scrolls with the results, so large text never squeezes them.
     final header = <Widget>[
       SliverToBoxAdapter(
@@ -188,7 +188,7 @@ class CreatorList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gutter = _gutter(context, 980);
+    final gutter = gutterFor(context, 980);
     // Two columns once a card would stretch past a comfortable reading width.
     final columns = MediaQuery.sizeOf(context).width >= 720 ? 2 : 1;
     final rows = (creators.length / columns).ceil();
@@ -238,7 +238,7 @@ class CreatorList extends StatelessWidget {
 }
 
 /// Hero for avatars that change size between routes.
-Widget _avatarHero(String? tag, Widget child) => tag == null
+Widget avatarHero(String? tag, Widget child) => tag == null
     ? child
     : Hero(
         tag: tag,
@@ -283,7 +283,7 @@ class CreatorCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              _avatarHero(
+              avatarHero(
                 heroTag,
                 CreatorAvatar(
                   id: c.id,
@@ -410,7 +410,7 @@ class CreatorCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(shape: BoxShape.circle, color: card),
-              child: _avatarHero(
+              child: avatarHero(
                 heroTag,
                 CreatorAvatar(
                   id: c.id,
@@ -458,32 +458,6 @@ class _GlassTag extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class FollowingScreen extends ConsumerWidget {
-  const FollowingScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: tabAppBar(context, 'Following'),
-      body: asyncBody(
-        ref.watch(followingProvider),
-        () => ref.invalidate(followingProvider),
-        (creators) => creators.isEmpty
-            ? const StateView(
-                icon: Icons.favorite_outline,
-                title: 'Follow creators to see them here',
-                message: 'Tap Follow on any creator in Discover.',
-              )
-            : RefreshIndicator(
-                onRefresh: () => ref.refresh(followingProvider.future),
-                child: CreatorList(creators: creators, heroPrefix: 'following'),
-              ),
-        loading: () => const SkeletonList(itemHeight: 188),
       ),
     );
   }
@@ -611,7 +585,7 @@ class _CreatorBodyState extends ConsumerState<_CreatorBody> {
     final posts = ref.watch(creatorPostsProvider(c.id));
     final tier = ref.watch(tiersProvider(c.id)).valueOrNull?.firstOrNull;
     final bannerHeight = 168 + MediaQuery.paddingOf(context).top;
-    final gutter = _gutter(context, 720);
+    final gutter = gutterFor(context, 720);
     final postCount = posts.valueOrNull?.length;
     return CustomScrollView(
       slivers: [
@@ -727,7 +701,7 @@ class _CreatorBodyState extends ConsumerState<_CreatorBody> {
                     shape: BoxShape.circle,
                     color: scheme.surface,
                   ),
-                  child: _avatarHero(
+                  child: avatarHero(
                     widget.heroTag,
                     CreatorAvatar(
                       id: c.id,

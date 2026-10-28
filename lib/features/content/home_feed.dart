@@ -536,6 +536,8 @@ class _FeedPostState extends ConsumerState<FeedPost>
     HapticFeedback.selectionClick();
     showModalBottomSheet<void>(
       context: context,
+      // Above the shell's floating tab bar.
+      useRootNavigator: true,
       showDragHandle: true,
       useSafeArea: true,
       builder: (sheet) => Column(
