@@ -161,7 +161,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           heroTag: state.extra is String ? state.extra! as String : null,
         ),
       ),
-      GoRoute(path: '/search', builder: (_, _) => const CreatorSearchScreen()),
+      GoRoute(
+        path: '/search',
+        builder: (_, state) => CreatorSearchScreen(
+          initialCategory: state.uri.queryParameters['category'],
+        ),
+      ),
       GoRoute(
         path: '/stories/:creatorId',
         // Transparent, so a drag-to-dismiss reveals the home underneath.

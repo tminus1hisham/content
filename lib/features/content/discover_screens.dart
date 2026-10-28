@@ -36,7 +36,10 @@ double gutterFor(BuildContext context, [double maxWidth = 640]) =>
 
 /// IT.md F3: creator search, opened from the home top bar.
 class CreatorSearchScreen extends ConsumerStatefulWidget {
-  const CreatorSearchScreen({super.key});
+  const CreatorSearchScreen({super.key, this.initialCategory});
+
+  /// Category selected on open, e.g. from a Discover browse chip.
+  final String? initialCategory;
 
   @override
   ConsumerState<CreatorSearchScreen> createState() =>
@@ -45,7 +48,7 @@ class CreatorSearchScreen extends ConsumerStatefulWidget {
 
 class _CreatorSearchScreenState extends ConsumerState<CreatorSearchScreen> {
   String _query = '';
-  String? _category;
+  late String? _category = widget.initialCategory;
 
   /// Last results, kept on screen while a new query loads, so typing doesn't
   /// flash a skeleton on every keystroke.
