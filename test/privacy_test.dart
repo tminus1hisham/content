@@ -104,10 +104,7 @@ void main() {
       for (final tab in ['Following', 'Live', 'Inbox', 'Profile', 'Discover']) {
         await _tap(
           tester,
-          find.descendant(
-            of: find.byType(NavigationBar),
-            matching: find.text(tab),
-          ),
+          find.descendant(of: find.byType(AppNavBar), matching: find.text(tab)),
         );
       }
       await openCreator(tester, 'Amani');
@@ -128,10 +125,7 @@ void main() {
       for (final tab in ['Studio', 'Go live', 'Messages', 'Profile']) {
         await _tap(
           tester,
-          find.descendant(
-            of: find.byType(NavigationBar),
-            matching: find.text(tab),
-          ),
+          find.descendant(of: find.byType(AppNavBar), matching: find.text(tab)),
         );
       }
       await _tap(tester, find.text('Earnings'));

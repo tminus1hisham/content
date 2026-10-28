@@ -399,33 +399,5 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       scrolledUnderElevation: 0,
       titleTextStyle: w(textTheme.titleLarge, FontWeight.w700, -0.3),
     ),
-    // The shell lays its own blur behind this, so the bar itself is translucent.
-    navigationBarTheme: NavigationBarThemeData(
-      height: 64,
-      elevation: 0,
-      backgroundColor: scheme.surface.withValues(alpha: 0.82),
-      surfaceTintColor: Colors.transparent,
-      indicatorColor: scheme.primary.withValues(alpha: 0.14),
-      indicatorShape: const StadiumBorder(),
-      iconTheme: WidgetStateProperty.resolveWith(
-        (states) => IconThemeData(
-          size: 24,
-          color: states.contains(WidgetState.selected)
-              ? scheme.primary
-              : scheme.onSurfaceVariant,
-        ),
-      ),
-      labelTextStyle: WidgetStateProperty.resolveWith(
-        (states) => textTheme.labelSmall?.copyWith(
-          fontSize: 11.5,
-          fontWeight: states.contains(WidgetState.selected)
-              ? FontWeight.w700
-              : FontWeight.w500,
-          color: states.contains(WidgetState.selected)
-              ? scheme.onSurface
-              : scheme.onSurfaceVariant,
-        ),
-      ),
-    ),
   );
 }

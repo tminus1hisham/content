@@ -23,7 +23,6 @@ import '../features/settings/privacy_screen.dart';
 import '../features/settings/security_screen.dart';
 import '../features/settings/settings_screen.dart';
 import 'motion.dart';
-import 'ui.dart';
 
 enum UserRole { fan, creator }
 
@@ -53,15 +52,15 @@ final roleProvider = NotifierProvider<RoleController, UserRole>(
   RoleController.new,
 );
 
-class _Tab {
-  const _Tab(this.label, this.path, this.icon, this.selectedIcon);
+class NavTab {
+  const NavTab(this.label, this.path, this.icon, this.selectedIcon);
   final String label;
   final String path;
   final IconData icon;
   final IconData selectedIcon;
 }
 
-const _profileTab = _Tab(
+const _profileTab = NavTab(
   'Profile',
   '/profile',
   Icons.person_outline,
@@ -69,18 +68,23 @@ const _profileTab = _Tab(
 );
 
 const _fanTabs = [
-  _Tab('Discover', '/discover', Icons.explore_outlined, Icons.explore),
-  _Tab('Following', '/following', Icons.favorite_outline, Icons.favorite),
-  _Tab('Live', '/live', Icons.live_tv_outlined, Icons.live_tv),
-  _Tab('Inbox', '/inbox', Icons.mail_outline, Icons.mail),
+  NavTab('Discover', '/discover', Icons.explore_outlined, Icons.explore),
+  NavTab('Following', '/following', Icons.favorite_outline, Icons.favorite),
+  NavTab('Live', '/live', Icons.live_tv_outlined, Icons.live_tv),
+  NavTab('Inbox', '/inbox', Icons.mail_outline, Icons.mail),
   _profileTab,
 ];
 
 const _creatorTabs = [
-  _Tab('Home', '/home', Icons.dashboard_outlined, Icons.dashboard),
-  _Tab('Studio', '/studio', Icons.video_library_outlined, Icons.video_library),
-  _Tab('Go live', '/go-live', Icons.videocam_outlined, Icons.videocam),
-  _Tab('Messages', '/messages', Icons.chat_bubble_outline, Icons.chat_bubble),
+  NavTab('Home', '/home', Icons.dashboard_outlined, Icons.dashboard),
+  NavTab(
+    'Studio',
+    '/studio',
+    Icons.video_library_outlined,
+    Icons.video_library,
+  ),
+  NavTab('Go live', '/go-live', Icons.videocam_outlined, Icons.videocam),
+  NavTab('Messages', '/messages', Icons.chat_bubble_outline, Icons.chat_bubble),
   _profileTab,
 ];
 
@@ -249,55 +253,148 @@ final routerProvider = Provider<GoRouter>((ref) {
 class _Shell extends ConsumerWidget {
   const _Shell({required this.shell, required this.tabs});
   final StatefulNavigationShell shell;
-  final List<_Tab> tabs;
+  final List<NavTab> tabs;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const radius = BorderRadius.all(Radius.circular(28));
     return Scaffold(
-      // Content scrolls under the floating frosted bar.
+      // Content scrolls under the floating bar.
       extendBody: true,
       body: shell,
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.14),
-                blurRadius: 28,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Glass(
-            color: Colors.transparent,
-            borderRadius: radius,
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant,
+      bottomNavigationBar: AppNavBar(
+        tabs: tabs,
+        selectedIndex: shell.currentIndex,
+        onSelected: (i) {
+          if (i != shell.currentIndex) HapticFeedback.selectionClick();
+          // Re-tapping the home tab scrolls the feed back to the top.
+          if (i == 0 && i == shell.currentIndex) {
+            ref.read(homeScrollTopProvider.notifier).state++;
+          }
+          // A toast from one tab shouldn't float over the next tab's controls.
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          shell.goBranch(i, initialLocation: i == shell.currentIndex);
+        },
+      ),
+    );
+  }
+}
+
+/// Floating card bar: the selected tab sits in a filled ink circle.
+class AppNavBar extends StatelessWidget {
+  const AppNavBar({
+    super.key,
+    required this.tabs,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+  final List<NavTab> tabs;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    const radius = BorderRadius.all(Radius.circular(26));
+    return SafeArea(
+      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
-            child: NavigationBar(
-              selectedIndex: shell.currentIndex,
-              onDestinationSelected: (i) {
-                if (i != shell.currentIndex) HapticFeedback.selectionClick();
-                // Re-tapping the home tab scrolls the feed back to the top.
-                if (i == 0 && i == shell.currentIndex) {
-                  ref.read(homeScrollTopProvider.notifier).state++;
-                }
-                // A toast from one tab shouldn't float over the next tab's controls.
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                shell.goBranch(i, initialLocation: i == shell.currentIndex);
-              },
-              destinations: [
-                for (final tab in tabs)
-                  NavigationDestination(
-                    icon: Icon(tab.icon),
-                    selectedIcon: Icon(tab.selectedIcon),
-                    label: tab.label,
+          ],
+        ),
+        child: Material(
+          color: scheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: radius,
+            side: BorderSide(
+              color: scheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            child: Row(
+              children: [
+                for (final (i, tab) in tabs.indexed)
+                  Expanded(
+                    child: _NavItem(
+                      tab: tab,
+                      selected: i == selectedIndex,
+                      onTap: () => onSelected(i),
+                    ),
                   ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.tab,
+    required this.selected,
+    required this.onTap,
+  });
+  final NavTab tab;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final duration = motion(context, shortDuration);
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkResponse(
+        onTap: onTap,
+        radius: 36,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: duration,
+                curve: easeOut,
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected ? scheme.onSurface : Colors.transparent,
+                ),
+                child: Icon(
+                  selected ? tab.selectedIcon : tab.icon,
+                  size: selected ? 22 : 24,
+                  color: selected ? scheme.surface : scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              AnimatedDefaultTextStyle(
+                duration: duration,
+                curve: easeOut,
+                style: theme.textTheme.labelSmall!.copyWith(
+                  fontSize: selected ? 12 : 11.5,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+                ),
+                child: Text(
+                  tab.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
         ),
       ),

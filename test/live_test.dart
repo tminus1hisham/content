@@ -273,7 +273,7 @@ void main() {
     await _tap(
       tester,
       find.descendant(
-        of: find.byType(NavigationBar),
+        of: find.byType(AppNavBar),
         matching: find.text('Go live'),
       ),
     );

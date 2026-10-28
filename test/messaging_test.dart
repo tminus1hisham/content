@@ -1,4 +1,4 @@
-import 'package:content/app/router.dart' show roleKey;
+import 'package:content/app/router.dart' show AppNavBar, roleKey;
 import 'package:content/core/api_client.dart';
 import 'package:content/core/fake_backend.dart';
 import 'package:content/core/prefs.dart';
@@ -182,7 +182,7 @@ void main() {
     await _tap(
       tester,
       find.descendant(
-        of: find.byType(NavigationBar),
+        of: find.byType(AppNavBar),
         matching: find.text('Messages'),
       ),
     );
@@ -202,7 +202,7 @@ void main() {
     await _tap(
       tester,
       find.descendant(
-        of: find.byType(NavigationBar),
+        of: find.byType(AppNavBar),
         matching: find.text('Messages'),
       ),
     );
@@ -221,7 +221,7 @@ void main() {
     await _tap(
       tester,
       find.descendant(
-        of: find.byType(NavigationBar),
+        of: find.byType(AppNavBar),
         matching: find.text('Messages'),
       ),
     );

@@ -34,7 +34,7 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 }
 
 Finder _tab(String label) =>
-    find.descendant(of: find.byType(NavigationBar), matching: find.text(label));
+    find.descendant(of: find.byType(AppNavBar), matching: find.text(label));
 
 void main() {
   testWidgets('creator sells a photo; a fan buys it and it unlocks', (
