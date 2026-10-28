@@ -134,4 +134,55 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Post'), findsOneWidget);
   });
+
+  testWidgets('a creator room follows the third post and its Follow flips', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    final follow = find.byKey(const ValueKey('suggest-follow-zuri'));
+    // Positions in feed coordinates, so they compare across scrolls.
+    double at(Offset o) =>
+        o.dy + tester.state<ScrollableState>(_feed.first).position.pixels;
+    // The lead is post one, so the first room sits right under post three.
+    final third = _post('30-day programme');
+    final fourth = _post('Morning stretch routine');
+    await _reveal(tester, third);
+    final thirdEnd = at(tester.getBottomLeft(third));
+    await _reveal(tester, follow);
+    final room = at(tester.getTopLeft(follow));
+    expect(room, greaterThan(thirdEnd));
+    expect(
+      find.descendant(of: follow, matching: find.text('Follow')),
+      findsOneWidget,
+    );
+    await tester.tap(follow);
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: follow, matching: find.text('Following')),
+      findsOneWidget,
+    );
+    await _reveal(tester, fourth);
+    expect(room, lessThan(at(tester.getTopLeft(fourth))));
+  });
+
+  testWidgets('a browse chip opens search with its category selected', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await tester.tap(find.byKey(const ValueKey('browse-Fitness')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('discover-search')), findsOneWidget);
+    expect(
+      tester
+          .widget<FilterChip>(find.widgetWithText(FilterChip, 'Fitness'))
+          .selected,
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<FilterChip>(find.widgetWithText(FilterChip, 'Music'))
+          .selected,
+      isFalse,
+    );
+  });
 }

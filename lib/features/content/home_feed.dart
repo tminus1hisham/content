@@ -10,6 +10,7 @@ import '../../app/motion.dart';
 import '../../app/theme.dart';
 import '../../app/ui.dart';
 import '../../core/api_client.dart';
+import '../../core/money.dart';
 import '../live/live_screens.dart';
 import 'content_api.dart';
 import 'discover_screens.dart';
@@ -65,10 +66,31 @@ String timeAgo(DateTime t, {bool short = false, DateTime? now}) {
 }
 
 bool _largeText(BuildContext context) =>
-    MediaQuery.textScalerOf(context).scale(1) > 1.4;
+    MediaQuery.textScalerOf(context).scale(14) / 14 > 1.4;
 
-/// IT.md F3: the fan's home. Stories, then a feed of followed and
-/// discoverable creators' posts.
+/// 20pt gutters, widening to centre a 640pt column on big screens.
+double _gutter(BuildContext context) =>
+    math.max(20, (MediaQuery.sizeOf(context).width - 640) / 2);
+
+/// "Tuesday evening": the masthead's edition line.
+String _edition(DateTime now) {
+  final h = now.hour;
+  final part = h < 5
+      ? 'night'
+      : h < 12
+      ? 'morning'
+      : h < 17
+      ? 'afternoon'
+      : h < 21
+      ? 'evening'
+      : 'night';
+  return '${DateFormat.EEEE().format(now)} $part';
+}
+
+const ({String query, String? category}) _filter = (query: '', category: null);
+
+/// IT.md F3: the fan's home. Masthead, browse chips and stories, a lead post,
+/// then the feed with Creator Rooms woven in.
 class DiscoverScreen extends ConsumerStatefulWidget {
   const DiscoverScreen({super.key});
 
@@ -82,8 +104,12 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   /// Content has scrolled under the top bar: frost it.
   bool _under = false;
 
-  /// Fresh suggestions after a pull to refresh.
+  /// Fresh rooms after a pull to refresh.
   int _refreshes = 0;
+
+  /// Creators the fan doesn't follow, fixed at first load so a room stays put
+  /// after its Follow flips.
+  List<Creator>? _rooms;
 
   @override
   void dispose() {
@@ -108,7 +134,10 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
 
   Future<List<Post>> _refresh() {
     HapticFeedback.mediumImpact();
-    setState(() => _refreshes++);
+    setState(() {
+      _refreshes++;
+      _rooms = null;
+    });
     ref.invalidate(liveNowProvider);
     ref.invalidate(discoveryProvider);
     // Fresh server data is authoritative: drop the optimistic overrides.
@@ -122,7 +151,10 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     ref.listen(homeScrollTopProvider, (_, _) => _toTop());
     final feed = ref.watch(feedProvider);
     final live = ref.watch(liveNowProvider).valueOrNull ?? const [];
-    final side = math.max(0.0, (MediaQuery.sizeOf(context).width - 470) / 2);
+    final found = ref.watch(discoveryProvider(_filter));
+    if (found.hasValue && !found.isLoading) {
+      _rooms ??= found.value!.where((c) => !c.isFollowing).take(10).toList();
+    }
     Widget fill(Widget child) => SliverFillRemaining(child: child);
     final body = feed.when(
       loading: () => [const SliverToBoxAdapter(child: _HomeSkeleton())],
@@ -135,29 +167,14 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
           ),
         ),
       ],
-      data: (posts) => posts.isEmpty && live.isEmpty
-          ? [
-              fill(
-                StateView(
-                  icon: Icons.dynamic_feed_outlined,
-                  title: 'Your feed is quiet',
-                  message: 'Follow creators to fill it up.',
-                  action: FilledButton.icon(
-                    style: brandButtonStyle(context),
-                    onPressed: () => context.push('/search'),
-                    icon: const Icon(Icons.search_rounded),
-                    label: const Text('Find creators'),
-                  ),
-                ),
-              ),
-            ]
-          : _feed(posts, live, side),
+      data: (posts) => _feed(posts, live),
     );
     return Scaffold(
       body: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
         child: RefreshIndicator.adaptive(
-          edgeOffset: MediaQuery.paddingOf(context).top + kToolbarHeight,
+          edgeOffset:
+              MediaQuery.paddingOf(context).top + _TopBar.heightOf(context),
           onRefresh: _refresh,
           child: CustomScrollView(
             controller: _scroll,
@@ -166,6 +183,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             ),
             slivers: [
               _TopBar(under: _under),
+              const SliverToBoxAdapter(child: _BrowseChips()),
               ...body,
             ],
           ),
@@ -174,36 +192,86 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     );
   }
 
-  List<Widget> _feed(
-    List<Post> posts,
-    List<Map<String, dynamic>> live,
-    double side,
-  ) {
-    final items = <Widget>[
-      for (final (i, p) in posts.indexed)
+  List<Widget> _feed(List<Post> posts, List<Map<String, dynamic>> live) {
+    final rooms = [
+      for (final c in _rooms ?? const <Creator>[])
+        _CreatorRoom(key: ValueKey('room-${c.id}-$_refreshes'), creator: c),
+    ];
+    final stories = SliverToBoxAdapter(
+      child: StoriesTray(posts: posts, live: live),
+    );
+    if (posts.isEmpty && _rooms != null && rooms.isEmpty) {
+      return [
+        stories,
+        SliverFillRemaining(
+          child: StateView(
+            icon: Icons.dynamic_feed_outlined,
+            title: 'Your feed is quiet',
+            message: 'Follow creators to fill it up.',
+            action: FilledButton.icon(
+              style: brandButtonStyle(context),
+              onPressed: () => context.push('/search'),
+              icon: const Icon(Icons.search_rounded),
+              label: const Text('Find creators'),
+            ),
+          ),
+        ),
+      ];
+    }
+    // The gap between two items is the larger of their margins, never both.
+    final items = <Widget>[];
+    var owed = 0.0;
+    void add(Widget w, {double above = 0, double below = 16}) {
+      if (items.isNotEmpty) items.add(SizedBox(height: math.max(owed, above)));
+      items.add(w);
+      owed = below;
+    }
+
+    final text = Theme.of(context).textTheme;
+    for (final (i, p) in posts.indexed) {
+      if (i == 1) {
+        add(
+          Semantics(
+            header: true,
+            child: Text(
+              'Latest from people you follow',
+              style: text.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          above: 24,
+          below: 12,
+        );
+      }
+      add(
         Entrance(
           key: ValueKey(p.id),
           index: i,
-          child: FeedPost(key: ValueKey('feed-post-${p.id}'), post: p),
+          child: FeedPost(
+            key: ValueKey('feed-post-${p.id}'),
+            post: p,
+            lead: i == 0,
+          ),
         ),
-    ];
-    // Suggestions after the second post, or last when the feed is short.
-    items.insert(
-      math.min(2, items.length),
-      _Suggested(key: ValueKey('suggested-$_refreshes')),
-    );
+      );
+      // Rooms after the third and seventh posts; the rest close the feed.
+      if ((i == 2 || i == 6) && rooms.isNotEmpty) {
+        add(rooms.removeAt(0), above: 24, below: 24);
+      }
+    }
+    for (final room in rooms) {
+      add(room, above: 24, below: 24);
+    }
+    final gutter = _gutter(context);
     return [
-      SliverPadding(
-        padding: EdgeInsets.symmetric(horizontal: side),
-        sliver: SliverToBoxAdapter(
-          child: StoriesTray(posts: posts, live: live),
-        ),
-      ),
+      stories,
       SliverPadding(
         padding: EdgeInsets.fromLTRB(
-          side,
-          4,
-          side,
+          gutter,
+          16,
+          gutter,
           24 + MediaQuery.paddingOf(context).bottom,
         ),
         sliver: SliverList.list(children: items),
@@ -212,62 +280,61 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   }
 }
 
+/// The masthead: an edition line over the wordmark, with search and inbox.
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.under});
   final bool under;
 
+  static TextStyle? _eyebrowStyle(BuildContext context) =>
+      Theme.of(context).textTheme.labelMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.8,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      );
+
+  static TextStyle? _wordmarkStyle(BuildContext context) =>
+      Theme.of(context).textTheme.headlineLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.75,
+        color: Theme.of(context).colorScheme.onSurface,
+      );
+
+  /// Toolbar height that fits the masthead at the current text size.
+  static double heightOf(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    double line(TextStyle? style) {
+      final painter = TextPainter(
+        text: TextSpan(text: 'Rg', style: style),
+        textScaler: scaler,
+        textDirection: Directionality.of(context),
+      )..layout();
+      final h = painter.height;
+      painter.dispose();
+      return h;
+    }
+
+    final title =
+        line(_eyebrowStyle(context)) + 2 + line(_wordmarkStyle(context));
+    return 16 + (_largeText(context) ? title + 8 + 48 : math.max(title, 48));
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final brand = Brand.of(context);
+    final gutter = _gutter(context);
+    final large = _largeText(context);
     Widget action(Key key, String tip, IconData icon, VoidCallback onTap) =>
         Pressable(
-          scale: 0.92,
           child: IconButton(
             key: key,
             tooltip: tip,
             onPressed: onTap,
-            icon: Icon(icon),
+            icon: Icon(icon, size: 24),
           ),
         );
-    return SliverAppBar(
-      floating: true,
-      snap: true,
-      backgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      scrolledUnderElevation: 0,
-      elevation: 0,
-      titleSpacing: 16,
-      flexibleSpace: AnimatedOpacity(
-        opacity: under ? 1 : 0,
-        duration: motion(context, shortDuration),
-        curve: easeOut,
-        child: Glass(
-          border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
-          child: const SizedBox.expand(),
-        ),
-      ),
-      title: Semantics(
-        header: true,
-        label: 'Raha',
-        child: ExcludeSemantics(
-          child: ShaderMask(
-            blendMode: BlendMode.srcIn,
-            shaderCallback: brand.gradient.createShader,
-            // A wordmark, not body text: it keeps its drawn size.
-            child: Text(
-              'Raha',
-              textScaler: TextScaler.noScaling,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -1,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ),
-      actions: [
+    final actions = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
         action(
           const ValueKey('home-search'),
           'Search',
@@ -278,8 +345,104 @@ class _TopBar extends StatelessWidget {
           HapticFeedback.selectionClick();
           context.go('/inbox');
         }),
-        const SizedBox(width: 4),
       ],
+    );
+    final title = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(_edition(DateTime.now()), style: _eyebrowStyle(context)),
+        const SizedBox(height: 2),
+        Semantics(
+          header: true,
+          child: Text('Raha', style: _wordmarkStyle(context)),
+        ),
+      ],
+    );
+    return SliverAppBar(
+      floating: true,
+      snap: true,
+      automaticallyImplyLeading: false,
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 0,
+      elevation: 0,
+      toolbarHeight: heightOf(context),
+      titleSpacing: 0,
+      flexibleSpace: AnimatedOpacity(
+        opacity: under ? 1 : 0,
+        duration: motion(context, shortDuration),
+        curve: easeOut,
+        child: Glass(
+          border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+          child: const SizedBox.expand(),
+        ),
+      ),
+      // AppBar clamps its title's text scale; the masthead scales fully.
+      title: MediaQuery(
+        data: MediaQuery.of(context),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(gutter, 8, gutter - 12, 8),
+          child: large
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    title,
+                    const SizedBox(height: 8),
+                    Align(alignment: Alignment.centerRight, child: actions),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: title),
+                    const SizedBox(width: 12),
+                    actions,
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Browse by category: each chip opens Search filtered to it.
+class _BrowseChips extends ConsumerWidget {
+  const _BrowseChips();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    if (categories.isEmpty) return const SizedBox.shrink();
+    final gutter = _gutter(context);
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
+      child: Row(
+        spacing: 8,
+        children: [
+          for (final c in categories)
+            Pressable(
+              child: ActionChip(
+                key: ValueKey('browse-$c'),
+                label: Text(c),
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.1,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                labelPadding: EdgeInsets.zero,
+                onPressed: () => context.push(
+                  '/search?category=${Uri.encodeQueryComponent(c)}',
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -295,12 +458,14 @@ class StoriesTray extends ConsumerWidget {
     final seen = ref.watch(seenStoriesProvider);
     final creators = storyOrder(live, posts, seen);
     if (creators.isEmpty) return const SizedBox.shrink();
+    final gutter = _gutter(context);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
+      padding: EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
         children: [
           for (final c in creators)
             _StoryCircle(
@@ -325,8 +490,8 @@ class _StoryCircle extends StatefulWidget {
 
 class _StoryCircleState extends State<_StoryCircle>
     with SingleTickerProviderStateMixin {
-  static const _avatar = 68.0;
-  static const _ring = _avatar + 12;
+  static const _face = 44.0;
+  static const _ring = 56.0;
 
   late final _spin = AnimationController(vsync: this, duration: mediumDuration);
 
@@ -349,13 +514,13 @@ class _StoryCircleState extends State<_StoryCircle>
   Widget build(BuildContext context) {
     final c = widget.creator;
     final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
     final brand = Brand.of(context);
+    final large = _largeText(context);
     final ringed = c.live || !widget.seen;
-    final circle = SizedBox(
-      width: _ring,
-      height: _ring,
+    final circle = SizedBox.square(
+      dimension: _ring,
       child: Stack(
-        clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
           RotationTransition(
@@ -378,23 +543,21 @@ class _StoryCircleState extends State<_StoryCircle>
               color: scheme.surface,
             ),
           ),
-          CreatorAvatar(id: c.id, name: c.name, size: _avatar),
+          CreatorAvatar(id: c.id, name: c.name, size: _face),
           if (c.live)
             Positioned(
-              bottom: -6,
+              bottom: 0,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
                   gradient: brand.gradient,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: scheme.surface, width: 2),
                 ),
-                child: const Text(
+                child: Text(
                   'LIVE',
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
+                  style: text.labelSmall?.copyWith(
+                    color: brandInk,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.4,
                   ),
@@ -410,30 +573,25 @@ class _StoryCircleState extends State<_StoryCircle>
       onTap: _open,
       child: ExcludeSemantics(
         child: Pressable(
-          scale: 0.92,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _open,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: SizedBox(
+              width: large ? 112 : 80,
               child: Column(
                 children: [
                   circle,
-                  if (!_largeText(context)) ...[
-                    const SizedBox(height: 6),
-                    SizedBox(
-                      width: _ring,
-                      child: Text(
-                        c.handle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(fontSize: 12),
-                      ),
+                  const SizedBox(height: 4),
+                  Text(
+                    c.name,
+                    maxLines: large ? null : 2,
+                    overflow: large ? null : TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: text.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
@@ -444,10 +602,13 @@ class _StoryCircleState extends State<_StoryCircle>
   }
 }
 
-/// One post, edge to edge: header, 4:5 media, likes and caption.
+/// One feed post. [lead] is the large card that opens the feed. Otherwise a
+/// locked post (or one without media) is a compact row with its unlock CTA,
+/// and the rest are inset cards with 4:5 media.
 class FeedPost extends ConsumerStatefulWidget {
-  const FeedPost({super.key, required this.post});
+  const FeedPost({super.key, required this.post, this.lead = false});
   final Post post;
+  final bool lead;
 
   @override
   ConsumerState<FeedPost> createState() => _FeedPostState();
@@ -455,12 +616,14 @@ class FeedPost extends ConsumerStatefulWidget {
 
 class _FeedPostState extends ConsumerState<FeedPost>
     with TickerProviderStateMixin {
+  static const _burstDuration = Duration(milliseconds: 600);
+
   bool _expanded = false;
 
-  /// Heart burst over the media: 450ms pop, 250ms hold, 200ms fade.
+  /// Heart burst over the media: pop, hold, fade.
   late final _burst = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
+    duration: _burstDuration,
   );
   late final _burstScale = CurvedAnimation(
     parent: _burst,
@@ -469,7 +632,7 @@ class _FeedPostState extends ConsumerState<FeedPost>
   late final _burstFade = ReverseAnimation(
     CurvedAnimation(
       parent: _burst,
-      curve: const Interval(0.78, 1, curve: easeOut),
+      curve: const Interval(0.65, 1, curve: easeOut),
     ),
   );
 
@@ -484,6 +647,15 @@ class _FeedPostState extends ConsumerState<FeedPost>
   ]).animate(CurvedAnimation(parent: _pop, curve: easeOut));
 
   @override
+  void initState() {
+    super.initState();
+    // Not every layout shows the burst or the like pop; create them up front
+    // so dispose never builds a ticker on a deactivated element.
+    _burst;
+    _pop;
+  }
+
+  @override
   void dispose() {
     _burst.dispose();
     _pop.dispose();
@@ -491,6 +663,7 @@ class _FeedPostState extends ConsumerState<FeedPost>
   }
 
   Post get _post => widget.post;
+  bool get _locked => _post.locked || _post.media.isEmpty;
 
   // Watched in build; handlers re-read so they never act on a stale frame.
   ({int likes, bool liked}) get _like =>
@@ -501,8 +674,7 @@ class _FeedPostState extends ConsumerState<FeedPost>
 
   /// [want] null toggles.
   Future<void> _setLiked(bool? want) async {
-    final now =
-        ref.read(likeOverridesProvider)[_post.id]?.liked ?? _post.liked;
+    final now = ref.read(likeOverridesProvider)[_post.id]?.liked ?? _post.liked;
     final like = want ?? !now;
     if (like == now) return;
     like ? HapticFeedback.lightImpact() : HapticFeedback.selectionClick();
@@ -525,12 +697,26 @@ class _FeedPostState extends ConsumerState<FeedPost>
   }
 
   void _doubleTap() {
-    _burst.forward(from: 0);
+    // Reduced motion: no burst; the like button still fills.
+    _burst.duration = motion(context, _burstDuration);
+    if (_burst.duration != Duration.zero) _burst.forward(from: 0);
     _setLiked(true);
   }
 
   void _openPost() => context.push('/p/${_post.id}');
   void _openCreator() => context.push('/c/${_post.creatorHandle}');
+
+  /// Same mapping as the post screen's unlock bar.
+  void _unlock() {
+    switch (_post.access) {
+      case 'paid':
+        context.push('/checkout/post/${_post.id}');
+      case 'subscribers':
+        context.push('/checkout/subscription/${_post.creatorId}');
+      default:
+        _openCreator();
+    }
+  }
 
   void _more() {
     HapticFeedback.selectionClick();
@@ -565,170 +751,362 @@ class _FeedPostState extends ConsumerState<FeedPost>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final muted = text.bodySmall?.copyWith(
-      color: scheme.onSurfaceVariant,
-      fontSize: 12,
-    );
-    final created = _post.createdAt;
-    final header = Padding(
-      padding: const EdgeInsets.fromLTRB(4, 8, 0, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Pressable(
-              child: InkWell(
-                onTap: _openCreator,
-                borderRadius: BorderRadius.circular(controlRadius),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    children: [
-                      CreatorAvatar(
-                        id: _post.creatorId,
-                        name: _post.creatorName,
-                        size: 32,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text.rich(
-                              TextSpan(
-                                text: _post.creatorHandle,
-                                children: [
-                                  const TextSpan(text: ' '),
-                                  WidgetSpan(
-                                    alignment: PlaceholderAlignment.middle,
-                                    child: Icon(
-                                      Icons.verified,
-                                      size: 14,
-                                      color: scheme.primary,
-                                      semanticLabel: 'Verified',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: text.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (created != null)
-                              Text(timeAgo(created, short: true), style: muted),
-                          ],
-                        ),
-                      ),
-                    ],
+  /// Taps open the post; a double tap likes it.
+  Widget _tappable(Widget child) => Semantics(
+    button: true,
+    label: _locked ? 'Locked post: ${_post.caption}' : _post.caption,
+    onTap: _openPost,
+    child: GestureDetector(
+      excludeFromSemantics: true,
+      onTap: _openPost,
+      onDoubleTap: _doubleTap,
+      child: child,
+    ),
+  );
+
+  Widget _media() => _locked
+      ? LockedMedia(post: _post)
+      : MediaView(mediaId: _post.media.first.id);
+
+  Widget _heart() => IgnorePointer(
+    child: AnimatedBuilder(
+      animation: _burst,
+      builder: (_, _) => !_burst.isAnimating
+          ? const SizedBox.shrink()
+          : Center(
+              child: Opacity(
+                opacity: _burstFade.value,
+                child: Transform.scale(
+                  scale: _burstScale.value,
+                  child: const Icon(
+                    Icons.favorite,
+                    size: 96,
+                    color: Colors.white,
+                    shadows: [Shadow(color: Colors.black38, blurRadius: 24)],
                   ),
                 ),
               ),
             ),
-          ),
-          Pressable(
-            scale: 0.92,
-            child: IconButton(
-              tooltip: 'More',
-              onPressed: _more,
-              icon: const Icon(Icons.more_horiz),
+    ),
+  );
+
+  Widget _likeButton({Color? color}) => ScaleTransition(
+    scale: _popScale,
+    child: IconButton(
+      key: ValueKey('like-${_post.id}'),
+      tooltip: _liked ? 'Unlike' : 'Like',
+      onPressed: () => _setLiked(null),
+      icon: Icon(
+        _liked ? Icons.favorite : Icons.favorite_border,
+        color: _liked ? Brand.of(context).glowB : color,
+        size: 24,
+      ),
+    ),
+  );
+
+  Widget _moreButton({ButtonStyle? style}) => IconButton(
+    tooltip: 'More',
+    onPressed: _more,
+    style: style,
+    icon: const Icon(Icons.more_horiz, size: 24),
+  );
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: EdgeInsets.zero,
+    clipBehavior: Clip.antiAlias,
+    child: widget.lead
+        ? _leadCard(context)
+        : _locked
+        ? _lockedRow(context)
+        : _insetCard(context),
+  );
+
+  Widget _leadCard(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final large = _largeText(context);
+    final created = _post.createdAt;
+    Widget details(Color fg, Color fg2) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            CreatorAvatar(
+              id: _post.creatorId,
+              name: _post.creatorName,
+              size: 28,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _post.creatorName,
+                    maxLines: large ? null : 1,
+                    overflow: large ? null : TextOverflow.ellipsis,
+                    style: text.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: fg,
+                    ),
+                  ),
+                  if (created != null)
+                    Text(
+                      timeAgo(created),
+                      style: text.bodySmall?.copyWith(color: fg2),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (_post.caption.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            _post.caption,
+            maxLines: large ? null : 2,
+            overflow: large ? null : TextOverflow.ellipsis,
+            style: text.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.1,
+              color: fg,
             ),
           ),
         ],
-      ),
+      ],
     );
-    final locked = _post.locked || _post.media.isEmpty;
-    final reduce = MediaQuery.disableAnimationsOf(context);
-    final media = Semantics(
-      button: true,
-      label: locked ? 'Locked post: ${_post.caption}' : _post.caption,
-      onTap: _openPost,
-      child: GestureDetector(
-        excludeFromSemantics: true,
-        onTap: _openPost,
-        onDoubleTap: _doubleTap,
-        child: AspectRatio(
-          aspectRatio: 4 / 5,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              locked
-                  ? LockedMedia(post: _post)
-                  : MediaView(mediaId: _post.media.first.id),
-              IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: _burst,
-                  builder: (_, _) => !_burst.isAnimating
-                      ? const SizedBox.shrink()
-                      : Center(
-                          // Reduced motion: the heart just appears, then goes.
-                          child: Opacity(
-                            opacity: reduce ? 1 : _burstFade.value,
-                            child: Transform.scale(
-                              scale: reduce ? 1 : _burstScale.value,
-                              child: const Icon(
-                                Icons.favorite,
-                                size: 96,
-                                color: Colors.white,
-                                shadows: [
-                                  Shadow(color: Colors.black38, blurRadius: 24),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+    final picture = Stack(
+      fit: StackFit.expand,
+      children: [
+        _tappable(_media()),
+        if (!large)
+          const IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.25, 0.6, 1],
+                  colors: [Color(0x00000000), Color(0xD9000000), Colors.black],
                 ),
               ),
+            ),
+          ),
+        _heart(),
+        Positioned(
+          top: 12,
+          left: 12,
+          child: IgnorePointer(child: _AccessChip(post: _post)),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: _moreButton(
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black54,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ),
+        if (!large)
+          Positioned(
+            left: 16,
+            right: 4,
+            bottom: 12,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Taps fall through to the media.
+                Expanded(
+                  child: IgnorePointer(
+                    child: details(Colors.white, Colors.white),
+                  ),
+                ),
+                _likeButton(color: Colors.white),
+              ],
+            ),
+          ),
+      ],
+    );
+    if (!large) return SizedBox(height: 300, child: picture);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(height: 220, child: picture),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 4, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: details(scheme.onSurface, scheme.onSurfaceVariant),
+              ),
+              _likeButton(),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _lockedRow(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final large = _largeText(context);
+    final created = _post.createdAt;
+    final thumb = ClipRRect(
+      borderRadius: const BorderRadius.all(Radius.circular(controlRadius)),
+      child: SizedBox(
+        width: large ? double.infinity : 88,
+        height: large ? 160 : 104,
+        child: LockedMedia(post: _post),
+      ),
+    );
+    final details = Column(
+      crossAxisAlignment: large
+          ? CrossAxisAlignment.stretch
+          : CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            text: _post.creatorName,
+            style: text.titleSmall,
+            children: [
+              if (created != null)
+                TextSpan(
+                  text: ' · ${timeAgo(created, short: true)}',
+                  style: text.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (_post.caption.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            _post.caption,
+            maxLines: large ? null : 2,
+            overflow: large ? null : TextOverflow.ellipsis,
+            style: text.bodyMedium,
+          ),
+        ],
+        const SizedBox(height: 10),
+        Pressable(
+          child: FilledButton(
+            style: brandButtonStyle(context),
+            onPressed: _unlock,
+            child: Text(switch (_post.access) {
+              'paid' => 'Unlock · ${formatKes(_post.priceCents ?? 0)}',
+              'subscribers' => 'Subscribe',
+              _ => 'View profile',
+            }),
+          ),
+        ),
+      ],
+    );
+    return Semantics(
+      button: true,
+      label: 'Locked post: ${_post.caption}',
+      onTap: _openPost,
+      child: InkWell(
+        excludeFromSemantics: true,
+        onTap: _openPost,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: large
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [thumb, const SizedBox(height: 12), details],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    thumb,
+                    const SizedBox(width: 12),
+                    Expanded(child: details),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _insetCard(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final large = _largeText(context);
+    final created = _post.createdAt;
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 4, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: _openCreator,
+              borderRadius: BorderRadius.circular(controlRadius),
+              child: Row(
+                children: [
+                  CreatorAvatar(
+                    id: _post.creatorId,
+                    name: _post.creatorName,
+                    size: 40,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _post.creatorName,
+                          maxLines: large ? null : 1,
+                          overflow: large ? null : TextOverflow.ellipsis,
+                          style: text.titleSmall,
+                        ),
+                        if (created != null)
+                          Text(
+                            timeAgo(created),
+                            style: text.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          _moreButton(),
+        ],
+      ),
+    );
+    final media = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.all(Radius.circular(controlRadius)),
+        child: _tappable(
+          AspectRatio(
+            aspectRatio: 4 / 5,
+            child: Stack(fit: StackFit.expand, children: [_media(), _heart()]),
           ),
         ),
       ),
     );
-    final likeColor = Brand.of(context).glowB;
-    final handleStyle = text.bodyMedium?.copyWith(fontWeight: FontWeight.w700);
-    final caption = TextSpan(
-      style: text.bodyMedium,
-      children: [
-        TextSpan(text: _post.creatorHandle, style: handleStyle),
-        TextSpan(text: ' ${_post.caption}'),
-      ],
-    );
+    final caption = TextSpan(text: _post.caption, style: text.bodyMedium);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         header,
         media,
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
-          child: Pressable(
-            scale: 0.92,
-            child: ScaleTransition(
-              scale: _popScale,
-              child: IconButton(
-                key: ValueKey('like-${_post.id}'),
-                tooltip: _liked ? 'Unlike' : 'Like',
-                onPressed: () => _setLiked(null),
-                icon: Icon(
-                  _liked ? Icons.favorite : Icons.favorite_border,
-                  color: _liked ? likeColor : null,
-                  size: 28,
-                ),
-              ),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              _likeButton(),
               Text(
                 '${NumberFormat.decimalPattern().format(_likes)} '
                 '${_likes == 1 ? 'like' : 'likes'}',
@@ -738,142 +1116,127 @@ class _FeedPostState extends ConsumerState<FeedPost>
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
-              if (_post.caption.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final painter = TextPainter(
-                      text: caption,
-                      maxLines: 2,
-                      textDirection: Directionality.of(context),
-                      textScaler: MediaQuery.textScalerOf(context),
-                    )..layout(maxWidth: constraints.maxWidth);
-                    final clipped = !_expanded && painter.didExceedMaxLines;
-                    painter.dispose();
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text.rich(
-                          caption,
-                          maxLines: _expanded ? null : 2,
-                          overflow: _expanded ? null : TextOverflow.ellipsis,
-                        ),
-                        if (clipped)
-                          Semantics(
-                            button: true,
-                            child: GestureDetector(
-                              onTap: () => setState(() => _expanded = true),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 4,
-                                ),
-                                child: Text(
-                                  'more',
-                                  style: text.bodyMedium?.copyWith(
-                                    color: scheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ],
-              if (created != null) ...[
-                const SizedBox(height: 6),
-                Text(timeAgo(created), style: muted),
-              ],
             ],
           ),
         ),
+        if (_post.caption.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final open = _expanded || large;
+                final painter = TextPainter(
+                  text: caption,
+                  maxLines: 2,
+                  textDirection: Directionality.of(context),
+                  textScaler: MediaQuery.textScalerOf(context),
+                )..layout(maxWidth: constraints.maxWidth);
+                final clipped = !open && painter.didExceedMaxLines;
+                painter.dispose();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text.rich(
+                      caption,
+                      maxLines: open ? null : 2,
+                      overflow: open ? null : TextOverflow.ellipsis,
+                    ),
+                    if (clipped)
+                      Semantics(
+                        button: true,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _expanded = true),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              'more',
+                              style: text.bodyMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
       ],
     );
   }
 }
 
-const ({String query, String? category}) _filter = (query: '', category: null);
-
-/// "Suggested for you": creators the fan doesn't follow yet.
-class _Suggested extends ConsumerStatefulWidget {
-  const _Suggested({super.key});
-
-  @override
-  ConsumerState<_Suggested> createState() => _SuggestedState();
-}
-
-class _SuggestedState extends ConsumerState<_Suggested> {
-  /// Fixed at first load, so a card stays put after its Follow flips.
-  List<Creator>? _creators;
+/// What a post costs to see, on media: "Free", "Subscribers", "KSh 150".
+class _AccessChip extends StatelessWidget {
+  const _AccessChip({required this.post});
+  final Post post;
 
   @override
   Widget build(BuildContext context) {
-    final loaded = ref.watch(discoveryProvider(_filter)).valueOrNull;
-    if (loaded != null) {
-      _creators ??= loaded.where((c) => !c.isFollowing).take(10).toList();
-    }
-    final creators = _creators ?? const <Creator>[];
-    if (creators.isEmpty) return const SizedBox.shrink();
-    final text = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Semantics(
-              header: true,
-              child: Text(
-                'Suggested for you',
-                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+    final label = post.access == 'paid' && post.priceCents != null
+        ? formatKes(post.priceCents!)
+        : accessLabels[post.access] ?? post.access;
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.all(Radius.circular(controlRadius)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (post.locked) ...[
+              const Icon(Icons.lock_outline, size: 14, color: Colors.white),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
               ),
             ),
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final c in creators)
-                  _SuggestedCard(key: ValueKey('suggest-${c.id}'), creator: c),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _SuggestedCard extends ConsumerStatefulWidget {
-  const _SuggestedCard({super.key, required this.creator});
+/// A creator the fan doesn't follow yet: banner, identity, Follow and a peek
+/// at their latest posts. Tapping the room opens the creator.
+class _CreatorRoom extends ConsumerStatefulWidget {
+  const _CreatorRoom({super.key, required this.creator});
   final Creator creator;
 
   @override
-  ConsumerState<_SuggestedCard> createState() => _SuggestedCardState();
+  ConsumerState<_CreatorRoom> createState() => _CreatorRoomState();
 }
 
-class _SuggestedCardState extends ConsumerState<_SuggestedCard> {
+class _CreatorRoomState extends ConsumerState<_CreatorRoom> {
+  static const _banner = 112.0;
+  static const _avatar = 56.0;
+
   late bool _following = widget.creator.isFollowing;
-  int _seq = 0;
+
+  /// A follow request is in flight: the button waits, keeping its label.
+  bool _pending = false;
 
   Future<void> _toggle() async {
     final follow = !_following;
     follow ? HapticFeedback.mediumImpact() : HapticFeedback.selectionClick();
-    final seq = ++_seq;
-    setState(() => _following = follow);
+    setState(() => _pending = true);
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await setFollowing(ref.read(dioProvider), widget.creator.id, follow);
+      if (mounted) setState(() => _following = follow);
     } catch (e) {
-      if (!mounted || seq != _seq) return;
-      setState(() => _following = !follow);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      messenger.showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+    } finally {
+      if (mounted) setState(() => _pending = false);
     }
   }
 
@@ -882,68 +1245,171 @@ class _SuggestedCardState extends ConsumerState<_SuggestedCard> {
     final c = widget.creator;
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final large = _largeText(context);
     final key = ValueKey('suggest-follow-${c.handle}');
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: SizedBox(
-        width: 156,
-        child: Pressable(
-          child: Material(
-            color: scheme.surfaceContainerLow,
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-              borderRadius: const BorderRadius.all(Radius.circular(cardRadius)),
-              side: BorderSide(color: scheme.outlineVariant),
+    final onFollow = _pending ? null : _toggle;
+    final follow = _following
+        ? FilledButton.tonalIcon(
+            key: key,
+            onPressed: onFollow,
+            icon: const Icon(Icons.check_rounded),
+            label: const Text('Following'),
+          )
+        : OutlinedButton(
+            key: key,
+            onPressed: onFollow,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: scheme.primary,
+              side: BorderSide(color: scheme.primary),
             ),
-            child: InkWell(
-              onTap: () => context.push('/c/${c.handle}'),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
-                child: Column(
-                  children: [
-                    CreatorAvatar(
-                      id: c.id,
-                      name: c.displayName,
-                      size: 88,
-                      ring: c.isSubscribed,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      c.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      '${compactCount(c.followers)} followers',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: _following
-                          ? OutlinedButton(
-                              key: key,
-                              onPressed: _toggle,
-                              child: const Text('Following'),
-                            )
-                          : FilledButton(
-                              key: key,
-                              style: brandButtonStyle(context),
-                              onPressed: _toggle,
-                              child: const Text('Follow'),
-                            ),
-                    ),
-                  ],
+            child: const Text('Follow'),
+          );
+    final meta = [
+      '@${c.handle}',
+      ?c.categories.firstOrNull,
+      '${compactCount(c.followers)} followers',
+    ].join(' · ');
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          c.displayName,
+          maxLines: large ? null : 1,
+          overflow: large ? null : TextOverflow.ellipsis,
+          style: text.titleMedium,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          meta,
+          style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+        ),
+      ],
+    );
+    Widget grid(List<Widget> tiles) => large
+        ? Column(
+            spacing: 8,
+            children: [for (final t in tiles) SizedBox(height: 150, child: t)],
+          )
+        : Row(
+            spacing: 8,
+            children: [
+              for (final t in tiles)
+                Expanded(child: SizedBox(height: 150, child: t)),
+            ],
+          );
+    final tiles = ref
+        .watch(creatorPostsProvider(c.id))
+        .when(
+          loading: () => grid(const [
+            Skeleton(height: 150, radius: controlRadius),
+            Skeleton(height: 150, radius: controlRadius),
+          ]),
+          // Previews are a bonus: on error the room keeps identity and Follow.
+          error: (_, _) => null,
+          data: (posts) => posts.isEmpty
+              ? null
+              : grid([for (final p in posts.take(2)) _RoomTile(post: p)]),
+        );
+    // The avatar ring hangs this far below the banner.
+    const overhang = _avatar / 2 + 3;
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push('/c/${c.handle}'),
+        child: Stack(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: _banner,
+                  child: CreatorBanner(id: c.id),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, overhang + 12, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (large) ...[
+                        identity,
+                        const SizedBox(height: 12),
+                        follow,
+                      ] else
+                        Row(
+                          children: [
+                            Expanded(child: identity),
+                            const SizedBox(width: 12),
+                            follow,
+                          ],
+                        ),
+                      if (c.bio.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          c.bio,
+                          maxLines: large ? null : 2,
+                          overflow: large ? null : TextOverflow.ellipsis,
+                          style: text.bodyMedium,
+                        ),
+                      ],
+                      if (tiles != null) ...[const SizedBox(height: 12), tiles],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Positioned(
+              left: 13,
+              top: _banner - _avatar / 2 - 3,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: scheme.surfaceContainerLow,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(3),
+                  child: CreatorAvatar(
+                    id: c.id,
+                    name: c.displayName,
+                    size: _avatar,
+                  ),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A Creator Room preview: the post, or its teaser cover and price when
+/// locked. Opens the post.
+class _RoomTile extends StatelessWidget {
+  const _RoomTile({required this.post});
+  final Post post;
+
+  @override
+  Widget build(BuildContext context) {
+    final locked = post.locked || post.media.isEmpty;
+    return Semantics(
+      button: true,
+      label: locked ? 'Locked post: ${post.caption}' : post.caption,
+      child: GestureDetector(
+        excludeFromSemantics: true,
+        onTap: () => context.push('/p/${post.id}'),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.all(Radius.circular(controlRadius)),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (locked)
+                LockedMedia(post: post)
+              else
+                MediaView(mediaId: post.media.first.id),
+              if (locked)
+                Positioned(top: 8, left: 8, child: _AccessChip(post: post)),
+            ],
           ),
         ),
       ),
@@ -951,55 +1417,49 @@ class _SuggestedCardState extends ConsumerState<_SuggestedCard> {
   }
 }
 
-/// Loading: story circles and two post-shaped blocks.
+/// Loading: story circles, the lead card and a locked row.
 class _HomeSkeleton extends StatelessWidget {
   const _HomeSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    Widget post() => const Padding(
-      padding: EdgeInsets.only(bottom: 20),
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(12, 12, 12, 12),
-            child: Row(
-              children: [
-                Skeleton(width: 32, height: 32, radius: 16),
-                SizedBox(width: 10),
-                Skeleton(width: 120),
-              ],
-            ),
-          ),
-          AspectRatio(
-            aspectRatio: 4 / 5,
-            child: Skeleton(height: double.infinity, radius: 0),
-          ),
-        ],
-      ),
-    );
+    final gutter = _gutter(context);
     return Semantics(
       label: 'Loading',
       child: ExcludeSemantics(
         child: Shimmer(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
+                padding: EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
                 child: Row(
+                  spacing: 8,
                   children: [
                     for (var i = 0; i < 5; i++)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 6),
-                        child: Skeleton(width: 80, height: 80, radius: 40),
+                      const SizedBox(
+                        width: 80,
+                        child: Column(
+                          spacing: 4,
+                          children: [
+                            Skeleton(width: 56, height: 56, radius: 28),
+                            Skeleton(width: 56, height: 12),
+                          ],
+                        ),
                       ),
                   ],
                 ),
               ),
-              post(),
-              post(),
+              Padding(
+                padding: EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
+                child: const Skeleton(height: 300, radius: cardRadius),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
+                child: const Skeleton(height: 128, radius: cardRadius),
+              ),
             ],
           ),
         ),
