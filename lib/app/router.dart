@@ -312,13 +312,14 @@ class AppNavBar extends StatelessWidget {
           color: scheme.surface,
           shape: RoundedRectangleBorder(
             borderRadius: radius,
-            side: BorderSide(
-              color: scheme.outlineVariant.withValues(alpha: 0.5),
-            ),
+            // The shadow is lost on a dark page, so the edge carries it there.
+            side: scheme.brightness == Brightness.dark
+                ? BorderSide(color: scheme.outlineVariant)
+                : BorderSide.none,
           ),
           clipBehavior: Clip.antiAlias,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
             child: Row(
               children: [
                 for (final (i, tab) in tabs.indexed)
@@ -384,14 +385,14 @@ class _NavItem extends StatelessWidget {
                 duration: duration,
                 curve: easeOut,
                 style: theme.textTheme.labelSmall!.copyWith(
-                  fontSize: selected ? 12 : 11.5,
+                  fontSize: 11.5,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
                 ),
-                child: Text(
-                  tab.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                // Long labels shrink to fit a narrow phone rather than clip.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(tab.label, maxLines: 1),
                 ),
               ),
             ],
