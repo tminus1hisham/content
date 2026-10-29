@@ -5,6 +5,9 @@ import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../core/api_client.dart' show usingFakeBackend;
+import '../core/demo_images.dart';
+
 import 'motion.dart';
 import 'theme.dart';
 
@@ -178,8 +181,7 @@ const _identityPairs = [
   (Color(0xFFFFA07A), Color(0xFFC23A6C)),
 ];
 
-/// A creator's generated colours, stable across sessions. Creators have no
-/// photo in the API, so this is their visual identity.
+/// Stable identity colours, also used when a profile has no demo photo.
 (Color, Color) identityColors(String id) =>
     _identityPairs[_hash(id) % _identityPairs.length];
 
@@ -204,30 +206,40 @@ class CreatorAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (a, b) = identityColors(id);
+    final photo = usingFakeBackend ? demoImageFor(id, number: 4) : null;
     final face = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
+        image: photo == null
+            ? null
+            : DecorationImage(
+                image: AssetImage(photo),
+                fit: BoxFit.cover,
+                alignment: const Alignment(0, -0.6),
+              ),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [a, b],
         ),
       ),
-      child: Text(
-        name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-        // Decorative and inside a fixed circle: the name is shown alongside.
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: size * 0.42,
-          height: 1,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.5,
-          color: Colors.white,
-        ),
-      ),
+      child: photo != null
+          ? null
+          : Text(
+              name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+              // Decorative and inside a fixed circle: the name is shown alongside.
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: size * 0.42,
+                height: 1,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.5,
+                color: Colors.white,
+              ),
+            ),
     );
     final avatar = ring
         ? Container(
@@ -250,13 +262,24 @@ class CreatorAvatar extends StatelessWidget {
   }
 }
 
-/// A creator's generated cover: soft light pooling over a dark velvet base.
+/// Demo profile photo cover, with a generated cover for other profiles.
 class CreatorBanner extends StatelessWidget {
   const CreatorBanner({super.key, required this.id});
   final String id;
 
   @override
   Widget build(BuildContext context) {
+    final photo = usingFakeBackend ? demoImageFor(id, number: 4) : null;
+    if (photo != null) {
+      return Image.asset(
+        photo,
+        fit: BoxFit.cover,
+        alignment: const Alignment(0, -0.5),
+        color: Colors.black.withValues(alpha: 0.55),
+        colorBlendMode: BlendMode.darken,
+        excludeFromSemantics: true,
+      );
+    }
     final (a, b) = identityColors(id);
     final h = _hash(id);
     Alignment at(int seed) =>

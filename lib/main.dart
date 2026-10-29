@@ -30,6 +30,7 @@ class App extends ConsumerWidget {
     final accent = accents[settings.accentIndex].color;
     final disguise = ref.watch(disguiseProvider);
     return MaterialApp.router(
+      debugShowCheckedModeBanner: false,
       // Shown in the recent-apps switcher, so it follows the disguise.
       title: disguise == Disguise.none ? 'Raha' : disguise.label,
       theme: buildTheme(accent, Brightness.light),

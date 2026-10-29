@@ -62,7 +62,7 @@ Future<String?> _code(Future<Object?> request) =>
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   FocusManager.instance.primaryFocus?.unfocus();
   await tester.pumpAndSettle();
-  await tester.ensureVisible(finder);
+  await Scrollable.ensureVisible(tester.element(finder), alignment: 0.5);
   await tester.pumpAndSettle();
   await tester.tap(finder);
   await tester.pumpAndSettle();
@@ -169,7 +169,7 @@ void main() {
   testWidgets('fan pays with M-Pesa and the post unlocks', (tester) async {
     await pumpApp(tester);
     await openCreator(tester, 'Amani');
-    await _tap(tester, find.text('Unlock for KSh 150'));
+    await openPostTile(tester, 'Unlock for KSh 150');
     await _tap(tester, find.byKey(const ValueKey('unlock')));
 
     expect(find.text('One-time payment. No renewal.'), findsOneWidget);
@@ -217,7 +217,7 @@ void main() {
   ) async {
     await pumpApp(tester);
     await openCreator(tester, 'Amani');
-    await _tap(tester, find.text('Unlock for KSh 150'));
+    await openPostTile(tester, 'Unlock for KSh 150');
     await _tap(tester, find.byKey(const ValueKey('unlock')));
     await tester.enterText(
       find.byKey(const ValueKey('checkout-phone')),
@@ -237,7 +237,7 @@ void main() {
   ) async {
     await pumpApp(tester);
     await openCreator(tester, 'Amani');
-    await _tap(tester, find.text('Unlock for KSh 150'));
+    await openPostTile(tester, 'Unlock for KSh 150');
     await _tap(tester, find.byKey(const ValueKey('unlock')));
     await tester.enterText(
       find.byKey(const ValueKey('checkout-phone')),

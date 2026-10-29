@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../../core/fake_backend.dart';
+import '../../core/demo_images.dart';
 import '../auth/fake_auth.dart';
 import '../messages/fake_messaging.dart';
 import '../onboarding/fake_onboarding.dart';
@@ -93,18 +94,18 @@ class FakeContentDb {
         ['Fitness'],
       ),
       (
-        'c11',
-        'kofi',
-        'Kofi Mensah',
-        'Afrobeats producer and singer.',
-        ['Music'],
-      ),
-      (
         'c12',
         'neema',
         'Neema Mushi',
         'Home cooking from Arusha.',
         ['Cooking', 'Lifestyle'],
+      ),
+      (
+        'c11',
+        'kofi',
+        'Kofi Mensah',
+        'Afrobeats producer and singer.',
+        ['Music'],
       ),
     ]) {
       _extraCreators[id] = {
@@ -117,18 +118,28 @@ class FakeContentDb {
         'discoverable': true,
       };
     }
-    // Oldest first: the posts tests look up must stay each creator's newest.
+    // Original seeds keep their IDs; extra photos below are dated earlier.
     final seeds = [
-      ('c12', 'Date night look', 'subscribers', null, 10),
-      ('c10', 'Diani weekend', 'paid', 30000, 11),
-      ('c12', 'Sunday brunch outfit', 'free', null, 12),
+      ('c12', 'Date night look', 'subscribers', null, 3),
+      ('c10', 'Diani weekend', 'paid', 30000, 3),
+      ('c11', 'New single preview', 'free', null, 1),
       ('u2', 'Behind the scenes at rehearsal', 'free', null, 1),
-      ('u2', 'Full routine, uncut', 'paid', 15000, 2),
-      ('u2', 'Members-only Q&A', 'subscribers', null, 3),
-      ('c10', 'Morning stretch routine', 'free', null, 4),
-      ('c10', '30-day programme', 'paid', 50000, 7),
-      ('c11', 'New single preview', 'free', null, 8),
-      ('c12', 'Pilau, my way', 'followers', null, 9),
+      ('u2', 'Full routine, uncut', 'paid', 15000, 3),
+      ('u2', 'Members-only Q&A', 'subscribers', null, 5),
+      ('c10', 'Morning stretch routine', 'free', null, 1),
+      ('c10', '30-day programme', 'paid', 50000, 2),
+      ('c12', 'Sunday brunch outfit', 'free', null, 2),
+      ('c12', 'Pilau, my way', 'followers', null, 1),
+      ('u2', 'A little city sunshine', 'free', null, 4),
+      ('u2', 'Coffee and your questions', 'free', null, 2),
+      ('c10', 'A slower morning outdoors', 'free', null, 4),
+      ('c10', 'Recovery day essentials', 'free', null, 5),
+      ('c11', 'Writing the next chorus', 'free', null, 2),
+      ('c11', 'Acoustic afternoon', 'free', null, 3),
+      ('c11', 'Before the show', 'free', null, 4),
+      ('c11', 'Weekend listening session', 'free', null, 5),
+      ('c12', 'Market day favourites', 'free', null, 4),
+      ('c12', 'Fresh flavours at home', 'free', null, 5),
     ];
     for (final (creatorId, caption, access, price, asset) in seeds) {
       final mediaId = 'm${++_seq}';
@@ -136,7 +147,7 @@ class FakeContentDb {
         mediaId,
         creatorId,
         'image',
-        asset: 'assets/demo/$asset.jpg',
+        asset: demoImageFor(creatorId, number: asset),
       );
       final id = 'p${++_seq}';
       _posts[id] = _Post(
@@ -147,7 +158,12 @@ class FakeContentDb {
         access: access,
         priceCents: price,
         status: 'published',
-        createdAt: DateTime.utc(2026, 10, 1).add(Duration(hours: _seq)),
+        // Keep the original post IDs and newest posts used by demo workflows.
+        createdAt: DateTime.utc(
+          2026,
+          _seq <= 20 ? 10 : 9,
+          1,
+        ).add(Duration(hours: _seq)),
         baseLikes:
             id.codeUnits.fold(7, (a, b) => (a * 31 + b) & 0x7fffffff) % 900 +
             40,

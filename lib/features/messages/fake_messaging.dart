@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../core/fake_backend.dart';
+import '../../core/demo_images.dart';
 import '../auth/fake_auth.dart';
 import '../content/fake_content.dart';
 import '../onboarding/fake_onboarding.dart';
@@ -74,7 +75,7 @@ class FakeMessagingDb {
       'msg-media-1',
       'u2',
       'image',
-      asset: 'assets/demo/5.jpg',
+      asset: demoImageFor('u2', number: 5),
     );
   }
 

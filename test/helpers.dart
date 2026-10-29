@@ -50,6 +50,18 @@ Future<void> pumpApp(
   await tester.pumpAndSettle();
 }
 
+/// Center the whole gallery tile so labels do not scroll under the app bar.
+Future<void> openPostTile(WidgetTester tester, String label) async {
+  final tile = find.ancestor(
+    of: find.text(label),
+    matching: find.byType(PostTile),
+  );
+  await Scrollable.ensureVisible(tester.element(tile), alignment: 0.5);
+  await tester.pumpAndSettle();
+  await tester.tap(tile);
+  await tester.pumpAndSettle();
+}
+
 /// From the fan home: search for [name] and open their creator page.
 Future<void> openCreator(WidgetTester tester, String name) async {
   await tester.tap(find.byKey(const ValueKey('home-search')));

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:content/app/router.dart';
 import 'package:content/core/api_client.dart';
+import 'package:content/core/demo_images.dart';
 import 'package:content/core/fake_backend.dart';
 import 'package:content/core/prefs.dart';
 import 'package:content/features/auth/fake_auth.dart';
@@ -60,13 +61,61 @@ class _FakePicker extends ImagePickerPlatform {
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   FocusManager.instance.primaryFocus?.unfocus();
   await tester.pumpAndSettle();
-  await tester.ensureVisible(finder);
+  await Scrollable.ensureVisible(tester.element(finder), alignment: 0.5);
   await tester.pumpAndSettle();
   await tester.tap(finder);
   await tester.pumpAndSettle();
 }
 
 void main() {
+  test(
+    'every demo identity has five local photos and creator posts own theirs',
+    () async {
+      final dio = await _dioAs('fan@demo.ke');
+      final allPhotos = <String>{};
+      for (final id in demoPhotoSets.keys) {
+        for (var number = 1; number <= 5; number++) {
+          final path = demoImageFor(id, number: number)!;
+          expect(File(path).existsSync(), isTrue, reason: path);
+          expect(allPhotos.add(path), isTrue, reason: 'Shared photo: $path');
+        }
+      }
+      expect(demoImageFor('unseeded-user'), isNull);
+      final creators = (await dio.get<List>('/discovery/creators')).data!;
+      for (final creator in creators) {
+        final id = creator['id'] as String;
+        final posts = (await dio.get<List>('/creators/$id/posts')).data!;
+        final photos = <String>{};
+        for (final post in posts) {
+          expect(post['media'], isNotEmpty);
+          for (final item in post['media']) {
+            final media = fakeContentDb.media[item['id']]!;
+            expect(media.ownerId, id);
+            expect(
+              media.asset,
+              startsWith('assets/demo/${demoPhotoSets[id]}-'),
+            );
+            photos.add(media.asset!);
+          }
+        }
+        expect(photos.length, greaterThanOrEqualTo(5), reason: id);
+        final publicPhoto = demoImageFor(id, number: 4);
+        expect(
+          posts.any(
+            (post) =>
+                post['access'] == 'free' &&
+                (post['media'] as List).any(
+                  (item) =>
+                      fakeContentDb.media[item['id']]?.asset == publicPhoto,
+                ),
+          ),
+          isTrue,
+          reason: 'Avatar and banner must use a free photo: $id',
+        );
+      }
+    },
+  );
+
   group('content access (server side)', () {
     test('paid media is denied until bought', () async {
       final dio = await _dioAs('fan@demo.ke');
@@ -218,7 +267,7 @@ void main() {
     await openCreator(tester, 'Amani');
     expect(find.text('Unlock for KSh 150'), findsOneWidget);
 
-    await _tap(tester, find.text('Unlock for KSh 150'));
+    await openPostTile(tester, 'Unlock for KSh 150');
     expect(find.text('Post'), findsOneWidget);
     expect(find.byType(LockedMedia), findsOneWidget);
     expect(find.byType(MediaView), findsNothing);
@@ -255,6 +304,15 @@ void main() {
     await tester.enterText(find.byKey(const ValueKey('composer-price')), '200');
     await tester.pump();
     expect(find.text('Fans pay KSh 200 to unlock'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('composer-consent')),
+      200,
+      scrollable: find
+          .byWidgetPredicate(
+            (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+          )
+          .last,
+    );
     await _tap(tester, find.byKey(const ValueKey('composer-consent')));
     await _tap(tester, find.byKey(const ValueKey('composer-publish')));
 

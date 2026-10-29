@@ -64,6 +64,7 @@ void main() {
     // Creator signs out; the fan signs in.
     await _tap(tester, _tab('Profile'));
     await _tap(tester, find.text('Log out'));
+    await _tap(tester, find.byKey(const ValueKey('confirm-sheet-confirm')));
     await _tap(tester, find.text('Sign in'));
     await tester.enterText(
       find.byKey(const ValueKey('login-identifier')),

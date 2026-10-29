@@ -41,11 +41,27 @@ void main() {
     expect(find.text('Sign out'), findsNWidgets(2));
 
     await _tap(tester, find.text('Sign out').last);
+    expect(find.textContaining('Sign out of '), findsOneWidget);
+    await _tap(tester, find.byKey(const ValueKey('confirm-sheet-confirm')));
     expect(find.text('Sign out'), findsOneWidget);
     expect(find.textContaining('(this device)'), findsOneWidget);
 
     await _tap(tester, find.text('Sign out'));
+    expect(find.text('Sign out?'), findsOneWidget);
+    await _tap(tester, find.byKey(const ValueKey('confirm-sheet-confirm')));
     expect(find.text('Create account'), findsOneWidget);
+  });
+
+  testWidgets('cancelling a session sign out keeps the session', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    fakeAuthDb.sessionFor('fan@demo.ke'); // a second device
+    await _openPrivacy(tester);
+    await _tap(tester, find.text('Sign out').last);
+    await _tap(tester, find.byKey(const ValueKey('confirm-sheet-cancel')));
+    expect(find.textContaining('Sign out of '), findsNothing);
+    expect(find.text('Sign out'), findsNWidgets(2));
   });
 
   testWidgets('deleting the account needs DELETE typed, then signs out', (

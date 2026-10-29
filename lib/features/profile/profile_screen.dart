@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/confirm_sheet.dart';
 import '../../app/motion.dart';
 import '../../app/router.dart';
 import '../../app/theme.dart';
@@ -139,18 +140,31 @@ class ProfileScreen extends ConsumerWidget {
                         ? const _FanBody(key: ValueKey(UserRole.fan))
                         : const _CreatorBody(key: ValueKey(UserRole.creator)),
                   ),
-                  const SizedBox(height: 24),
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: TextButton(
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(0, 48),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        textStyle: tt.labelLarge,
-                        foregroundColor: cs.onSurfaceVariant,
+                  const SizedBox(height: 32),
+                  Pressable(
+                    child: FilledButton.icon(
+                      key: const ValueKey('profile-log-out'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: cs.error,
+                        foregroundColor: cs.onError,
                       ),
-                      onPressed: () => ref.read(authProvider.notifier).logout(),
-                      child: const Text('Log out'),
+                      icon: const Icon(Icons.logout, size: 20),
+                      label: const Text('Log out'),
+                      onPressed: () async {
+                        final confirmed = await showConfirmSheet(
+                          context,
+                          icon: Icons.logout,
+                          title: 'Log out?',
+                          message:
+                              'You will need your email and password to '
+                              'sign back in.',
+                          confirmLabel: 'Log out',
+                          destructive: true,
+                        );
+                        if (confirmed) {
+                          await ref.read(authProvider.notifier).logout();
+                        }
+                      },
                     ),
                   ),
                 ],

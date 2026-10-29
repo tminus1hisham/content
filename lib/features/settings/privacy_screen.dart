@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/confirm_sheet.dart';
 import '../../app/ui.dart';
 import '../../core/api_client.dart';
 import '../auth/auth_controller.dart';
@@ -59,6 +60,18 @@ class PrivacyScreen extends ConsumerWidget {
   }
 
   Future<void> _revoke(WidgetRef ref, BuildContext context, _Json s) async {
+    final current = s['current'] == true;
+    final confirmed = await showConfirmSheet(
+      context,
+      icon: current ? Icons.logout : Icons.devices,
+      title: current ? 'Sign out?' : 'Sign out of ${s['device']}?',
+      message: current
+          ? 'You will need your email and password to sign back in.'
+          : 'That device will need your email and password to sign back in.',
+      confirmLabel: 'Sign out',
+      destructive: true,
+    );
+    if (!confirmed) return;
     try {
       await ref.read(dioProvider).delete<void>('/auth/sessions/${s['id']}');
       if (s['current'] == true) {

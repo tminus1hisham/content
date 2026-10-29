@@ -189,7 +189,25 @@ void main() {
     await tester.ensureVisible(find.text('Log out'));
     await tester.pumpAndSettle();
     await _tapText(tester, 'Log out');
+    expect(find.text('Log out?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirm-sheet-confirm')));
+    await tester.pumpAndSettle();
     expect(find.text('Create account'), findsOneWidget);
     expect(await secureStorage.read(key: accessTokenKey), isNull);
+  });
+
+  testWidgets('cancelling the log out sheet keeps you signed in', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await _tapText(tester, 'Profile');
+    await tester.ensureVisible(find.text('Log out'));
+    await tester.pumpAndSettle();
+    await _tapText(tester, 'Log out');
+    await tester.tap(find.byKey(const ValueKey('confirm-sheet-cancel')));
+    await tester.pumpAndSettle();
+    expect(find.text('Log out?'), findsNothing);
+    expect(find.text('Fan account'), findsOneWidget);
+    expect(await secureStorage.read(key: accessTokenKey), isNotNull);
   });
 }

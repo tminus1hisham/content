@@ -17,7 +17,12 @@ final _feed = find.byWidgetPredicate(
 
 /// Scrolls the feed (lazily built) until [finder] is on screen.
 Future<void> _reveal(WidgetTester tester, Finder finder) async {
-  await tester.scrollUntilVisible(finder, 300, scrollable: _feed.first);
+  await tester.scrollUntilVisible(
+    finder,
+    300,
+    scrollable: _feed.first,
+    maxScrolls: 100,
+  );
   await tester.pumpAndSettle();
 }
 
@@ -214,10 +219,8 @@ void main() {
   testWidgets('following from a room updates the Following tab', (
     tester,
   ) async {
-    Finder tab(String label) => find.descendant(
-      of: find.byType(AppNavBar),
-      matching: find.text(label),
-    );
+    Finder tab(String label) =>
+        find.descendant(of: find.byType(AppNavBar), matching: find.text(label));
     await pumpApp(tester);
     // Open Following first, so it stays mounted with its old list.
     await tester.tap(tab('Following'));
@@ -246,9 +249,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byType(FeedPost), findsNothing);
     expect(
-      find.byWidgetPredicate(
-        (w) => '${w.key}'.contains('suggest-follow-'),
-      ),
+      find.byWidgetPredicate((w) => '${w.key}'.contains('suggest-follow-')),
       findsWidgets,
     );
   });
