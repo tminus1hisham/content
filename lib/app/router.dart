@@ -402,10 +402,14 @@ class _NavItem extends StatelessWidget {
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
                 ),
-                // Long labels shrink to fit a narrow phone rather than clip.
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(tab.label, maxLines: 1),
+                // Long labels shrink to fit a narrow phone rather than clip,
+                // keeping a gap so neighbours never read as one word.
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(tab.label, maxLines: 1),
+                  ),
                 ),
               ),
             ],

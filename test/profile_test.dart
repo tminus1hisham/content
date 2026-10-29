@@ -1,4 +1,5 @@
 import 'package:content/app/router.dart';
+import 'package:content/features/auth/auth_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,6 +14,12 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 
 Finder _tab(String label) =>
     find.descendant(of: find.byType(AppNavBar), matching: find.text(label));
+
+/// An account whose role change never saves.
+class _RolesDown extends AuthController {
+  @override
+  Future<void> setRoles(Set<String> roles) async => throw Exception('offline');
+}
 
 void main() {
   testWidgets('both roles: workspace cards switch between fan and creator', (
@@ -76,5 +83,36 @@ void main() {
       tester.element(find.byType(TabBarView)),
     );
     expect(tabs.index, 1);
+  });
+
+  testWidgets('fan only: a failed become-a-creator keeps the fan view', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      overrides: [authProvider.overrideWith(_RolesDown.new)],
+    );
+    await _tap(tester, _tab('Profile'));
+    await _tap(tester, find.byKey(const ValueKey('workspace-creator')));
+
+    expect(find.text('Something went wrong. Try again.'), findsOneWidget);
+    expect(_tab('Discover'), findsOneWidget);
+    expect(_tab('Studio'), findsNothing);
+  });
+
+  testWidgets('nav labels keep a gap at 1.5x text on a phone', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpApp(tester);
+    final labels = ['Discover', 'Following', 'Live', 'Inbox', 'Profile'];
+    for (var i = 1; i < labels.length; i++) {
+      final gap =
+          tester.getTopLeft(_tab(labels[i])).dx -
+          tester.getTopRight(_tab(labels[i - 1])).dx;
+      expect(gap, greaterThanOrEqualTo(4), reason: labels[i]);
+    }
   });
 }

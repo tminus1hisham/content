@@ -31,8 +31,9 @@ class ProfileScreen extends ConsumerWidget {
 
     Future<void> becomeCreator() async {
       try {
-        await ref.read(roleProvider.notifier).set(UserRole.creator);
+        // Save the role first, so a failed save leaves the fan view in place.
         await ref.read(authProvider.notifier).setRoles({...roles, 'creator'});
+        await ref.read(roleProvider.notifier).set(UserRole.creator);
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(
