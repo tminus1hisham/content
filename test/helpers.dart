@@ -21,6 +21,7 @@ Future<void> pumpApp(
   bool adult = true,
   String? signedInAs = 'fan@demo.ke',
   String? pin,
+  List<Override> overrides = const [],
 }) async {
   fakeLatency = Duration.zero;
   resetFakeBackend();
@@ -39,7 +40,10 @@ Future<void> pumpApp(
   final sharedPrefs = await SharedPreferences.getInstance();
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(sharedPrefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(sharedPrefs),
+        ...overrides,
+      ],
       child: const App(),
     ),
   );

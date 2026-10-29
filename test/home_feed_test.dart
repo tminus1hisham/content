@@ -1,3 +1,4 @@
+import 'package:content/features/content/content_api.dart';
 import 'package:content/features/content/home_feed.dart';
 import 'package:content/features/content/media_view.dart';
 import 'package:flutter/gestures.dart' show kDoubleTapMinTime;
@@ -193,6 +194,23 @@ void main() {
           .widget<FilterChip>(find.widgetWithText(FilterChip, 'Music'))
           .selected,
       isFalse,
+    );
+  });
+
+  testWidgets('an empty feed shows creator rooms instead of failing', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      overrides: [feedProvider.overrideWith((_) async => <Post>[])],
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.byType(FeedPost), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (w) => '${w.key}'.contains('suggest-follow-'),
+      ),
+      findsWidgets,
     );
   });
 }

@@ -229,11 +229,13 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
 
     final text = Theme.of(context).textTheme;
     // The lead is the first post the fan can actually see.
-    final lead = posts.firstWhere(
-      (p) => !p.locked && p.media.isNotEmpty,
-      orElse: () => posts.first,
-    );
-    final ordered = [lead, ...posts.where((p) => p != lead)];
+    final lead = posts.isEmpty
+        ? null
+        : posts.firstWhere(
+            (p) => !p.locked && p.media.isNotEmpty,
+            orElse: () => posts.first,
+          );
+    final ordered = [?lead, ...posts.where((p) => p != lead)];
     for (final (i, p) in ordered.indexed) {
       if (i == 1) {
         add(
@@ -528,6 +530,8 @@ class _StoryCircleState extends State<_StoryCircle>
       dimension: _ring,
       child: Stack(
         alignment: Alignment.center,
+        // The LIVE badge hangs 8 below the ring.
+        clipBehavior: Clip.none,
         children: [
           RotationTransition(
             turns: CurvedAnimation(parent: _spin, curve: easeInOut),
@@ -588,7 +592,8 @@ class _StoryCircleState extends State<_StoryCircle>
               child: Column(
                 children: [
                   circle,
-                  const SizedBox(height: 4),
+                  // 4 below the LIVE badge's 8 overhang; every item alike.
+                  const SizedBox(height: 12),
                   Text(
                     c.name,
                     maxLines: large ? null : 2,
