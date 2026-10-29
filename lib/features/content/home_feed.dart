@@ -154,6 +154,9 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     final found = ref.watch(discoveryProvider(_filter));
     if (found.hasValue && !found.isLoading) {
       _rooms ??= found.value!.where((c) => !c.isFollowing).take(10).toList();
+    } else if (found.hasError && !found.isLoading) {
+      // No rooms to offer: an empty feed falls back to its empty state.
+      _rooms ??= const [];
     }
     Widget fill(Widget child) => SliverFillRemaining(child: child);
     final body = feed.when(
@@ -780,12 +783,17 @@ class _FeedPostState extends ConsumerState<FeedPost>
       ? LockedMedia(post: _post, showPrompt: prompt)
       : MediaView(mediaId: _post.media.first.id);
 
-  Widget _unlockButton(BuildContext context, {double minHeight = 0}) =>
+  /// The gradient is for money only; "View profile" is a plain button.
+  Widget _unlockButton(BuildContext context, {double minHeight = 52}) =>
       Pressable(
         child: FilledButton(
-          style: brandButtonStyle(
-            context,
-          ).copyWith(minimumSize: WidgetStatePropertyAll(Size(0, minHeight))),
+          style:
+              (_post.access == 'paid' || _post.access == 'subscribers'
+                      ? brandButtonStyle(context)
+                      : FilledButton.styleFrom())
+                  .copyWith(
+                    minimumSize: WidgetStatePropertyAll(Size(0, minHeight)),
+                  ),
           onPressed: _unlock,
           child: Text(switch (_post.access) {
             'paid' => 'Unlock · ${formatKes(_post.priceCents ?? 0)}',
@@ -1265,7 +1273,11 @@ class _CreatorRoomState extends ConsumerState<_CreatorRoom> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await setFollowing(ref.read(dioProvider), widget.creator.id, follow);
-      if (mounted) setState(() => _following = follow);
+      if (!mounted) return;
+      // Following, Profile's count and this room's tiles all depend on it.
+      ref.invalidate(followingProvider);
+      ref.invalidate(creatorPostsProvider(widget.creator.id));
+      setState(() => _following = follow);
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
     } finally {
@@ -1300,7 +1312,9 @@ class _CreatorRoomState extends ConsumerState<_CreatorRoom> {
     final meta = [
       '@${c.handle}',
       ?c.categories.firstOrNull,
-      if (c.followers > 0) '${compactCount(c.followers)} followers',
+      if (c.followers > 0)
+        '${compactCount(c.followers)} '
+            '${c.followers == 1 ? 'follower' : 'followers'}',
     ].join(' · ');
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1429,6 +1443,7 @@ class _RoomTile extends StatelessWidget {
     return Semantics(
       button: true,
       label: locked ? 'Locked post: ${post.caption}' : post.caption,
+      onTap: () => context.push('/p/${post.id}'),
       child: GestureDetector(
         excludeFromSemantics: true,
         onTap: () => context.push('/p/${post.id}'),

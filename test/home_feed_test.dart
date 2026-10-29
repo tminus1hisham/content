@@ -1,3 +1,4 @@
+import 'package:content/app/router.dart';
 import 'package:content/features/content/content_api.dart';
 import 'package:content/features/content/home_feed.dart';
 import 'package:content/features/content/media_view.dart';
@@ -195,6 +196,44 @@ void main() {
           .selected,
       isFalse,
     );
+  });
+
+  testWidgets('an empty feed with no rooms to offer shows its empty state', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      overrides: [
+        feedProvider.overrideWith((_) async => <Post>[]),
+        discoveryProvider.overrideWith((_, _) async => throw 'offline'),
+      ],
+    );
+    expect(find.text('Your feed is quiet'), findsOneWidget);
+  });
+
+  testWidgets('following from a room updates the Following tab', (
+    tester,
+  ) async {
+    Finder tab(String label) => find.descendant(
+      of: find.byType(AppNavBar),
+      matching: find.text(label),
+    );
+    await pumpApp(tester);
+    // Open Following first, so it stays mounted with its old list.
+    await tester.tap(tab('Following'));
+    await tester.pumpAndSettle();
+    expect(find.text('@zuri'), findsNothing);
+    await tester.tap(tab('Discover'));
+    await tester.pumpAndSettle();
+
+    final follow = find.byKey(const ValueKey('suggest-follow-zuri'));
+    await _reveal(tester, follow);
+    await tester.tap(follow);
+    await tester.pumpAndSettle();
+    await tester.tap(tab('Following'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('@zuri'), findsWidgets);
   });
 
   testWidgets('an empty feed shows creator rooms instead of failing', (
